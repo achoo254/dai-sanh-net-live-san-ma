@@ -65,7 +65,7 @@ Thêm người chơi ảo cho sảnh đông: `node server/load-test-simulate-man
 | `MAX_CODES_SESSION` | Mã tối đa mỗi người mỗi phiên (không tính Siêu Deal) | `2` |
 | `SLOT_RATIO` / `SLOT_MAX` | Số suất mỗi hộp = số người trong sảnh × tỉ lệ, tối đa | `0.15` / `10` |
 | `SUPER_SLOTS` | Số suất mỗi lần Siêu Deal | `5` |
-| `MAX_CONN_PER_IP` | Kết nối tối đa mỗi IP (nhà mạng dùng chung IP nên để rộng) | `200` |
+| `MAX_CONN_PER_IP` | Kết nối tối đa mỗi IP (1 IP nhà mạng di động có thể là hàng nghìn người thật; load test từ 1 máy cũng cần cao) | `3000` |
 | `TURNSTILE_SITEKEY` / `TURNSTILE_SECRET` | Bật chống bot Cloudflare Turnstile (miễn phí) | tắt |
 
 Ví dụ lịch:

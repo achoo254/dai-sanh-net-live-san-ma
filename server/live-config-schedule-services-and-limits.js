@@ -79,7 +79,8 @@ const config = {
   moveRatePerSec: 15,                           // tối đa 15 gói vị trí/giây/người (trình duyệt gửi ~10)
   maxMsgPerSec: 25,                             // quá ngưỡng này liên tục thì ngắt kết nối
   // Nhà mạng di động VN dùng chung 1 IP cho rất nhiều thuê bao (CGNAT) → để rộng, chống bot bằng Turnstile + giới hạn chạm
-  maxConnPerIp: num(env.MAX_CONN_PER_IP, 200),
+  // 1 IP nhà mạng di động (CGNAT) có thể gánh hàng nghìn người thật → để rất rộng; chống bot bằng Turnstile + giới hạn chạm/chat
+  maxConnPerIp: num(env.MAX_CONN_PER_IP, 3000),
 
   // Kho mã mẫu cho chạy thử (bỏ qua khi kho đã có mã)
   demoSeed: env.DEMO_SEED !== '0',
