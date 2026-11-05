@@ -12,6 +12,7 @@ const { Room } = require('./live-room-world-movement-drops-bugs');
 const { phaseAt } = require('./session-schedule-phase-calculator');
 const WR = require('../public/assets/world-map-rules-shared.js');
 const PuzzleKit = require('../public/assets/puzzle-cipher-generator-shared.js');
+const { ChatModerator } = require('./chat-moderation-filter-rate-limit-mute');
 
 const vnDay = ts => new Date(ts + 7 * 3600e3).toISOString().slice(0, 10);
 
@@ -44,6 +45,8 @@ class Hub {
     this.revealAnswers = cfg.demoLoop && process.env.LOADTEST_REVEAL_ANSWERS === '1';
     if (this.revealAnswers) console.warn('[CẢNH BÁO] LOADTEST_REVEAL_ANSWERS=1: đáp án mật thư được gửi kèm (chỉ để load test)!');
     store.seedSamplePuzzles(PuzzleKit);
+    this.mod = new ChatModerator(store);
+    this.chatSeq = 0; this.chatRecent = [];        // 500 tin gần nhất toàn hệ thống (cho quản trị)
     this.players = new Map();     // pid → Player (giữ cả người tạm rớt mạng trong phiên)
     this.rooms = [];
     this.roomSeq = 0;
@@ -132,6 +135,8 @@ class Hub {
     p.reply({
       t:'welcome', you:{ pid, nick, avatar, rid: p.rid, x: Math.round(p.x), y: Math.round(p.y) }, room: p.room.id,
       roster: p.room.roster().filter(r => r[0] !== p.rid),
+      chat: p.room.chatLog.filter(c => !c.hidden).slice(-30).map(c => this.chatPub(c)),
+      chatMutedUntil: this.mod.mutedUntil(pid),
       drops: p.room.live ? [...p.room.drops.values()].map(d => ({ id:d.id, kind:d.kind, svc:d.svc, x:Math.round(d.x), y:Math.round(d.y),
               slots:d.slots - d.takers.size, ttl: Math.max(0, d.until - Date.now()), mine: d.takers.has(pid) })) : [],
       services: this.cfg.services, need: this.cfg.piecesToUnlock, maxCodes: this.cfg.maxCodesPerSession,
@@ -288,6 +293,41 @@ class Hub {
         else break;
       }
     }
+  }
+
+  /* ---------- Chat trong sảnh ---------- */
+  chatPub(c){ return { id:c.id, rid:c.rid, nick:c.nick, m:c.m, ts:c.ts }; }
+  chat(p, text){
+    const room = p.room; if (!room) return;
+    const r = this.mod.check(p.pid, text);
+    if (!r.ok){ if (r.err) p.reply({ t:'chat_err', m:r.err }); return; }
+    const msg = { id: ++this.chatSeq, rid:p.rid, pid:p.pid, nick:p.nick, m:r.text, ts:Date.now(), room:room.id, reports:new Set(), hidden:false };
+    room.chatLog.push(msg); if (room.chatLog.length > 60) room.chatLog.shift();
+    this.chatRecent.push(msg); if (this.chatRecent.length > 500) this.chatRecent.shift();
+    room.broadcast({ t:'chat', ...this.chatPub(msg) });
+    if (r.masked) p.reply({ t:'chat_err', m:'Một số từ đã được che bớt. Chat văn minh nhé!', soft:true });
+  }
+  /** Người chơi báo cáo 1 tin. Đủ 3 người khác nhau báo → ẩn tin + khoá chat người gửi 10 phút. */
+  reportChat(p, id){
+    const room = p.room; if (!room) return;
+    const msg = room.chatLog.find(c => c.id === id);
+    if (!msg || msg.pid === p.pid || msg.hidden) return;
+    msg.reports.add(p.pid);
+    p.reply({ t:'chat_err', m:'Đã báo cáo tin nhắn. Cảm ơn em!', soft:true });
+    if (msg.reports.size >= 3) this.hideAndMute(msg.pid, 10 * 60e3, 'Bị 3 người báo cáo', msg.nick, msg.id);
+  }
+  /** Khoá chat 1 người. onlyId: chỉ ẩn tin bị báo cáo (khoá tự động); bỏ trống: ẩn mọi tin gần đây (quản trị khoá). */
+  hideAndMute(pid, ms, reason, nick, onlyId){
+    const until = this.mod.mute(pid, ms, reason, nick);
+    const match = c => c.pid === pid && (!onlyId || c.id === onlyId);
+    for (const r of this.rooms) for (const c of r.chatLog) if (match(c) && !c.hidden){ c.hidden = true; r.broadcast({ t:'chat_hide', id:c.id }); }
+    for (const c of this.chatRecent) if (match(c)) c.hidden = true;
+    const a = this.players.get(pid);
+    if (a) a.reply({ t:'chat_err', m:`Em bị tạm khoá chat (${reason}).`, mutedUntil: until });
+    return until;
+  }
+  adminChat(limit = 200){
+    return this.chatRecent.slice(-limit).reverse().map(c => ({ ...this.chatPub(c), pid:c.pid, room:c.room, reports:c.reports.size, hidden:c.hidden }));
   }
 
   /* ---------- Tồn kho ---------- */

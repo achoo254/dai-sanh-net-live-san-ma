@@ -73,6 +73,13 @@ hosting,BFHOST-7K2Q,Giảm 50%,Áp dụng gói năm đăng ký mới,30/11/2026,
   </section>
 
   <section class="card">
+    <h2>Chat văn phòng (kiểm duyệt)</h2>
+    <p class="msg">Tin gần nhất (mới ở trên). Từ thô tục đã tự che; link và số điện thoại bị chặn; tin bị 3 người báo cáo tự ẩn + khoá người gửi 10 phút. Bấm "Khoá" để khoá chat 1 người (ẩn luôn các tin gần đây của họ).</p>
+    <div class="row"><button id="btnChat" type="button" class="ghost">Tải tin nhắn</button><span class="msg" id="chatInfo"></span></div>
+    <table id="chatTable" hidden><thead><tr><th>Giờ</th><th>Sảnh</th><th>Người gửi</th><th>Nội dung</th><th>Báo cáo</th><th></th></tr></thead><tbody></tbody></table>
+  </section>
+
+  <section class="card">
     <h2>Đối soát</h2>
     <div class="row"><button id="btnExport" type="button">Tải danh sách mã đã cấp (CSV)</button></div>
     <p class="msg">Gồm mã, dịch vụ, người nhận (mã thiết bị + biệt danh), phiên, thời điểm cấp.</p>
@@ -141,6 +148,21 @@ async function loadPz(){
   $('#pzTable tbody').innerHTML = rows.join(''); $('#pzTable').hidden = false;
 }
 $('#btnPzStats').onclick = loadPz;
+async function loadChat(){
+  const r = await api('admin/api/chat?limit=200'); if (!r.ok) return;
+  const j = await r.json(), t = ts => new Date(ts).toLocaleTimeString('vi-VN', { timeZone:'Asia/Ho_Chi_Minh' });
+  $('#chatInfo').textContent = `${j.messages.length} tin · đang khoá ${j.mutes.length} người`;
+  $('#chatTable tbody').innerHTML = j.messages.map(m => `<tr style="${m.hidden ? 'opacity:.45' : ''}"><td>${t(m.ts)}</td><td>${esc(m.room)}</td><td>${esc(m.nick)}</td>
+    <td>${esc(m.m)}</td><td>${m.reports || ''}</td><td>${m.hidden ? 'đã ẩn' : `<button type="button" class="ghost" data-mute="${esc(m.pid)}" style="min-height:32px">Khoá 24h</button>`}</td></tr>`).join('');
+  $('#chatTable').hidden = false;
+}
+$('#btnChat').onclick = loadChat;
+$('#chatTable').addEventListener('click', async e => {
+  const b = e.target.closest('[data-mute]'); if (!b) return;
+  if (!confirm('Khoá chat người này 24 giờ và ẩn các tin gần đây của họ?')) return;
+  await api('admin/api/chat/mute', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ pid:b.dataset.mute, minutes:1440, reason:'Quản trị khoá' }) });
+  loadChat();
+});
 $('#btnExport').onclick = async () => {
   const r = await api('admin/api/export.csv');
   if (!r.ok) return alert('Không tải được (kiểm tra mã quản trị)');

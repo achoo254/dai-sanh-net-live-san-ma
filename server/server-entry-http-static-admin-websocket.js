@@ -110,6 +110,16 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, r);
       }
       if (p === '/admin/api/puzzles' && req.method === 'GET') return send(res, 200, store.puzzleReport());
+      if (p === '/admin/api/chat' && req.method === 'GET') return send(res, 200, { messages: hub.adminChat(+url.searchParams.get('limit') || 200), mutes: hub.mod.listMutes() });
+      if (p === '/admin/api/chat/mute' && req.method === 'POST'){
+        const b = JSON.parse(await readBody(req, 4096) || '{}');
+        if (!/^[A-Za-z0-9_-]{8,40}$/.test(b.pid || '')) return send(res, 400, { error:'pid không hợp lệ' });
+        const until = hub.hideAndMute(b.pid, Math.max(1, Math.min(10080, +b.minutes || 60)) * 60e3, b.reason || 'Quản trị khoá', '');
+        return send(res, 200, { ok:true, until });
+      }
+      if (p === '/admin/api/chat/unmute' && req.method === 'POST'){
+        const b = JSON.parse(await readBody(req, 4096) || '{}'); hub.mod.unmute(String(b.pid || '')); return send(res, 200, { ok:true });
+      }
       if (p === '/admin/api/puzzles' && req.method === 'POST'){
         const text = await readBody(req);
         return send(res, 200, store.importPuzzlesCsv(text, { replaceSample: url.searchParams.get('replaceSample') === '1',
@@ -191,6 +201,10 @@ wss.on('connection', (ws, req, ip) => {
       player.room.move(player, +m.x, +m.y);
     } else if (m.t === 'emo'){
       player.room.emote(player, m.i);
+    } else if (m.t === 'chat'){
+      if (typeof m.m === 'string' && m.m.length <= 400) hub.chat(player, m.m);
+    } else if (m.t === 'report'){
+      if (Number.isInteger(m.id)) hub.reportChat(player, m.id);
     } else if (m.t === 'ans'){
       if (typeof m.id === 'string' && typeof m.a === 'string' && m.a.length <= 80) hub.answer(player, m.id, m.a);
     }

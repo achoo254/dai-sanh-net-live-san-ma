@@ -149,6 +149,14 @@ Nâng giới hạn kết nối hệ điều hành: `worker_connections 20000;` t
 4. Quy tắc: đáp án chỉ nằm trên máy chủ; chấm không phân biệt hoa/thường, có dấu/không dấu, khoảng trắng; mã được giữ 90 giây khi đang giải; sai 3 lần hoặc hết giờ → mã trả lại kho, dịch vụ đó về 0 mảnh.
 5. Điểm giấu manh mối cấp 3: `pantry` (bảng ghim pantry), `server` (vách kính phòng máy chủ), `reception` (quầy lễ tân), `meeting` (cửa phòng họp OneShield), `lounge` (góc sofa), `atrium` (dưới màn LED).
 
+## 6b2. Chat trong văn phòng
+
+- Chat theo **sảnh** (≤100 người cùng sảnh thấy nhau): khung chat (máy tính ghim góc trái, bấm **Enter** để gõ; điện thoại mở bằng nút 💬) + **bong bóng lời nhắn trên đầu nhân vật** 5 giây.
+- Kiểm duyệt tự động (`server/chat-moderation-filter-rate-limit-mute.js`): che từ thô tục tiếng Việt/Anh (cả kiểu viết tách chữ, không dấu, lặp chữ), **chặn link và số điện thoại** (chống lừa đảo), tối đa 1 tin/1,5 giây và 6 tin/20 giây, chặn tin lặp. Danh sách từ cấm sửa trực tiếp trong file này.
+- Người chơi bấm ⚑ để báo cáo; tin bị **3 người khác nhau** báo cáo → ẩn tin đó + khoá chat người gửi 10 phút.
+- Trang quản trị → mục **Chat văn phòng**: xem 200 tin gần nhất (cả tin đã ẩn), số lượt báo cáo, bấm **Khoá 24h** (ẩn mọi tin gần đây của người đó). Danh sách khoá lưu SQLite, khởi động lại vẫn giữ.
+- Nên có người trực kiểm duyệt trong giờ live.
+
 ## 6c. Hiệu năng bản 3D (đo 05/11/2026, laptop Intel UHD 620)
 
 Thời gian vẽ 1 khung hình khi 101 nhân vật cùng trên màn hình: **≈ 5,7 ms (p50)**, 390 lệnh vẽ (ban đầu 19,8 ms / 890 lệnh). Tối ưu đã làm: gộp toàn bộ nội thất tĩnh thành 1 lưới; chỉ 30 người gần nhất vẽ đầy đủ (tên, bóng, hoạt cảnh), người xa gộp thành 1 lưới. **Chưa đo trên điện thoại thật** — cần thử trên Android tầm trung trước ngày chạy.

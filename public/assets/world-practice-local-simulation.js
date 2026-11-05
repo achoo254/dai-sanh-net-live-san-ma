@@ -27,6 +27,7 @@ window.PracticeHub = (() => {
       session = { id:'practice-' + now, title:'Luyện tay', lobbyAt: now, start: now + LOBBY_MS, end: now + LOBBY_MS + LIVE_MS };
       setPhase('lobby');
       bugs = [0, 1, 2].map(i => { let p; do { p = WR.randomWalkable(); } while (WR.dist2(p, WR.SPAWN) < 450 ** 2); return { id:i + 1, x:p.x, y:p.y, a:Math.random() * 6.28, turnIn:1 }; });
+      for (let k = 1; k <= 12; k++) later(k * 15000 + Math.random() * 6000, botSay);
       later(LOBBY_MS, () => {
         setPhase('live');
         [0.3, 0.65, 0.92].forEach(f => {
@@ -150,7 +151,13 @@ window.PracticeHub = (() => {
       seqTick = (seqTick + 1) % 3;
       if (!seqTick) out({ t:'snap', p: bots.map(b => [b.rid, Math.round(b.x), Math.round(b.y)]), b: phase === 'live' ? bugs.map(b => [b.id, Math.round(b.x), Math.round(b.y)]) : [] });
     }
-    let seqTick = 0, lbTick = 0;
+    let seqTick = 0, lbTick = 0, chatSeq = 0;
+    const BOT_LINES = ['Ai đi khu Hosting không?', 'Siêu Deal sắp rơi kìa!', 'Mật thư cấp 3 phải đi tìm manh mối nha', 'Né con virus đỏ ra 😂',
+      'Phòng máy chủ có manh mối đó', 'Gom đủ 5 mảnh rồi!', 'Chúc mọi người săn được mã 🎉', 'Pantry có bảng ghim nè', 'Giải mật thư khó ghê'];
+    function botSay(){
+      const b = bots[Math.floor(Math.random() * bots.length)]; if (!b) return;
+      out({ t:'chat', id: ++chatSeq, rid:b.rid, nick:b.nick, m: BOT_LINES[Math.floor(Math.random() * BOT_LINES.length)], ts:Date.now() });
+    }
     function end(){
       setPhase('ended');
       clearInterval(loop); loop = setInterval(tick, 66);
@@ -175,6 +182,11 @@ window.PracticeHub = (() => {
       } else if (m.t === 'emo' && me){
         out({ t:'emo', id:1, i:m.i });
         if (Math.random() < .5){ const b = bots[Math.floor(Math.random() * bots.length)]; later(700, () => out({ t:'emo', id:b.rid, i: Math.floor(Math.random() * 6) })); }
+      } else if (m.t === 'chat' && me){
+        const text = String(m.m || '').trim().slice(0, 120); if (!text) return;
+        out({ t:'chat', id: ++chatSeq, rid:1, nick:me.nick, m:text, ts:Date.now() });
+        if (Math.random() < .6) later(900 + Math.random() * 1500, () => botSay());
+      } else if (m.t === 'report'){ out({ t:'chat_err', m:'Đã báo cáo tin nhắn (luyện tay).', soft:true });
       } else if (m.t === 'ans'){ answer(m.id, m.a);
       } else if (m.t === 'restart'){ start(); }
     }

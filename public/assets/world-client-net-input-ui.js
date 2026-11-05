@@ -95,6 +95,8 @@ function setServices(list){
 /* ---------- Khởi động ---------- */
 const customizer = CharacterCustomizer.create({ root: $('#custom'), previewCanvas: $('#preview'), avatarMod, initial: me.avatar,
   onChange: v => { me.avatar = v; S.me.avatar = v; store.set('netLive.look', v); } });
+const chat = ChatBox.create({ root: $('#chat'), btn: $('#chatBtn'), badge: $('#chatBadge'),
+  onSend: text => send({ t:'chat', m:text }), onReport: id => send({ t:'report', id }) });
 const pz = PuzzlePanel.create({ root: $('#puzzle'), onSubmit: (id, a) => send({ t:'ans', id, a }),
   svcName: svc => svc === 'super' ? 'Siêu Deal' : (S.names[svc] || svc) });
 $('#nick').value = me.nick;
@@ -221,6 +223,12 @@ function handle(m){
       toast(m.reason === 'timeout' ? 'Hết giờ giữ mã, mã trả lại kho' : 'Hết lượt thử, mã trả lại kho', 'warn');
       track('puzzle_' + m.reason); return;
     case 'emo': return onEmote(m);
+    case 'chat': return onChat(m);
+    case 'chat_hide': return chat.hide(m.id);
+    case 'chat_err':
+      chat.sys(m.m, m.soft ? 'info' : 'warn');
+      if (m.mutedUntil) chat.setMuted(m.mutedUntil);
+      return;
     case 'stock': S.stock = m.s; return renderChips();
     case 'feed': return (m.items || []).forEach(pushTicker);
     case 'room': return onRoom(m);
@@ -235,6 +243,8 @@ function onWelcome(m){
   need = m.need || need; myRid = m.you.rid;
   S.me.x = m.you.x; S.me.y = m.you.y; S.me.avatar = m.you.avatar; S.me.nick = m.you.nick; S.target = null;
   S.puzzle = null; pz.close();
+  chat.load(m.chat || [], myRid); chat.setMuted(m.chatMutedUntil || 0);
+  $('#chatRoom').textContent = m.room ? (PRACTICE ? 'Luyện tay' : 'Sảnh ' + m.room) : '';
   S.others.clear(); (m.roster || []).forEach(addOther);
   S.drops.clear(); (m.drops || []).forEach(d => onDrop(d, true));
   G.score = m.state.score; G.pieces = m.state.pieces || {}; G.codes = m.state.codes || []; G.claimed = new Set(m.state.claimed || []);
@@ -295,6 +305,15 @@ function onEmote(m){
   const t = Date.now() + 2800, txt = EMOTES[m.i] || '';
   if (m.id === myRid){ S.me.emote = txt; S.me.emoteUntil = t; return; }
   const o = S.others.get(m.id); if (o){ o.emote = txt; o.emoteUntil = t; }
+}
+/** Tin chat: vào khung chat + bong bóng trên đầu nhân vật 5 giây */
+function onChat(m){
+  const mine = m.rid === myRid;
+  chat.add(m, mine);
+  const bubble = m.m.length > 38 ? m.m.slice(0, 36) + '…' : m.m, until = Date.now() + 5000;
+  if (mine){ S.me.emote = bubble; S.me.emoteUntil = until; }
+  else { const o = S.others.get(m.rid); if (o){ o.emote = bubble; o.emoteUntil = until; } }
+  if (!mine) sfx.pop();
 }
 function onRoom(m){
   const o = $('#online'); o.hidden = false;

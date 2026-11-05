@@ -24,6 +24,7 @@ class Room {
     this.drops = new Map(); this.bugs = [];
     this.seq = 0; this.ridSeq = 0; this.tickN = 0;
     this.timers = []; this.live = null; this.shieldSpawns = 0;
+    this.chatLog = [];                            // 60 tin gần nhất của sảnh (gửi cho người mới vào)
     this.loop = setInterval(() => this.tick(), TICK_MS);
   }
   get size(){ return this.members.size; }
