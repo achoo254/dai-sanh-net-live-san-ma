@@ -165,22 +165,20 @@ Nâng giới hạn kết nối hệ điều hành: `worker_connections 20000;` t
 
 Thời gian vẽ 1 khung hình khi 101 nhân vật cùng trên màn hình (bản cũ): ≈ 5,7 ms. **Chưa đo lại với bóng đổ** và **chưa đo trên điện thoại thật** — cần thử Android tầm trung trước ngày chạy; nếu chậm, tắt bóng đổ (biến `shadows` trong `office3d-office-scene-renderer.js`) hoặc giảm `NEAR_N`.
 
-## 7. Kết quả load test đã chạy (05/11/2026, laptop Windows, bot chạy CHUNG máy với máy chủ)
+## 7. Kết quả load test (05/11/2026)
 
-**Bản v5 (đi bộ), 300 người ảo / 3 sảnh, 1 phiên live 2 phút:**
-- Kết nối 300/300, không rớt. Độ trễ gửi vị trí → "nhặt được": p50 ≈ 27 ms, p95 ≈ 78 ms.
-- 217 mã cấp ra: **không mã trùng**, không ai vượt 2 mã/phiên hay nhận 2 mã cùng dịch vụ.
-- Bot đi đúng luật bị máy chủ kéo lùi ~16 lần/bot/phiên (mạng/máy bận), bot gian lận ~295 lần.
+**1.000 người ảo trên VM thật 103.216.118.92** (bot chạy ngay trên VM qua nginx + TLS, 1 tiến trình, OPEN_RATE 25):
+- Kết nối **1.000/1.000, không rớt**, tự chia **7 sảnh** (150 người/sảnh), live trọn 5 phút, 1.000/1.000 nhận màn kết quả.
+- Độ trễ gửi vị trí → "nhặt được": **p50 40 ms · p95 79 ms · p99 96 ms**.
+- Máy chủ game: CPU **50–125% của 1 nhân** (có đỉnh; bot chạy chung VM 4 vCPU), RAM ~150 MB, độ trễ vòng lặp p99 ~50 ms.
+- 23.629 hộp nhặt, 616 mật thư mở, không mã trùng, không vượt giới hạn.
+- Kết luận: **VM 4 vCPU/8 GB chịu được 1.000 người cùng lúc** với 1 tiến trình Node, còn dư CPU. Trần cứng còn lại: `worker_connections 768` của Nginx (chưa nâng).
 
-**Chống gian lận di chuyển (đã sửa qua 4 vòng đo):**
-- Máy chủ cấp "quãng đường" đúng bằng tốc độ đi bộ theo đồng hồ máy chủ, quỹ dự phòng 0,15 giây (42 đơn vị), kiểm tra va chạm trên cả đường đi (không nhảy xuyên quầy).
-- Thử cô lập 200 cuộc đua 1 suất (1 bot đúng luật vs 1 bot tốc biến): không jitter 78/104, có jitter mạng 65/52 → gần ngang nhau.
-- Trong sảnh đông 300 bot, bot tốc biến vẫn nhặt ~2,5× hộp so với bot đúng luật; phần chênh này **chưa tách được nguyên nhân** (có thể do hành vi bot test). Thiệt hại bị chặn bởi giới hạn 2 mã/phiên, 1 mã/dịch vụ/ngày.
-- Bot tự động (phản xạ tức thì) luôn nhanh hơn người: lớp chặn chính là Turnstile + giới hạn tần suất + rà soát danh sách đối soát sau phiên.
+Bài học khi đo: (1) `MAX_CONN_PER_IP` mặc định 200 từng chặn bot (và sẽ chặn người thật sau CGNAT) → nay 3.000; (2) bot từ laptop qua Internet chỉ mở được ~200 kết nối (giới hạn mạng nhà), phải chạy bot trên máy chủ; (3) OneDash khi "force rebuild" tự ghi đè `start_command` bằng lệnh gợi ý → kiểm tra lại sau khi phát hiện deps; (4) trên Windows 27% CPU máy chủ là syscall ghi socket, logic game ~3%.
 
-**Bản v4 (chạm tại chỗ, đã thay thế):** 1.000 người ảo đạt, p99 ≈ 190 ms.
+Bot gian lận (tốc biến) nhặt ~3,7× bot đúng luật trong sảnh đông; bị kéo về 820 lần/bot/phiên. Thiệt hại giới hạn bởi 2 mã/phiên, 1 mã/dịch vụ/ngày; Turnstile + rà soát sau phiên là lớp chặn chính.
 
-**Bắt buộc đo lại trên VM thật**, bot chạy từ máy khác (mục 6).
+**Bản v4/v5 cũ:** 300–1.000 bot trên laptop đạt, không mã trùng.
 
 ## 8. Giới hạn hiện tại
 
