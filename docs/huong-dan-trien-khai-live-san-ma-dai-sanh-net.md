@@ -10,6 +10,7 @@ public/                      ← trang người chơi (Nginx hoặc chính máy 
   assets/hall-scene.css|js   ← cảnh sảnh dùng chung
   assets/live-ui.css         ← giao diện riêng bản live
   assets/live-client-websocket-hall-ui.js
+package.json               ← npm install ở thư mục gốc
 server/
   server-entry-http-static-admin-websocket.js   ← file chạy chính
   live-config-schedule-services-and-limits.js   ← cấu hình, lịch phiên, luật
@@ -24,14 +25,14 @@ server/
 ## 1. Chạy thử tại máy
 
 ```bash
-cd 02-web/game/dai-sanh-net-san-deal-blackfriday/server
+cd 02-web/game/dai-sanh-net-san-deal-blackfriday
 npm install
-node run-demo-loop-local.js
+npm run demo
 ```
 
 Mở `http://localhost:8790`. Phiên lặp liên tục: sảnh chờ 45 giây → live 2 phút → nghỉ 45 giây. Kho tự nạp **mã minh họa** `DEMO-...`. Trang quản trị: `http://localhost:8790/admin.html`, mã quản trị `demo-admin`.
 
-Thêm người chơi ảo cho sảnh đông: `node load-test-simulate-many-players-websocket.js 60`.
+Thêm người chơi ảo cho sảnh đông: `node server/load-test-simulate-many-players-websocket.js 60`.
 
 ## 2. Yêu cầu máy chủ thật
 
@@ -75,9 +76,9 @@ Description=Live San Ma - Dai Sanh Net
 After=network.target
 
 [Service]
-WorkingDirectory=/opt/live-san-ma/server
+WorkingDirectory=/opt/live-san-ma
 EnvironmentFile=/etc/live-san-ma.env
-ExecStart=/usr/bin/node server-entry-http-static-admin-websocket.js
+ExecStart=/usr/bin/node server/server-entry-http-static-admin-websocket.js
 Restart=always
 RestartSec=2
 User=www-data
@@ -127,7 +128,7 @@ Nâng giới hạn kết nối hệ điều hành: `worker_connections 20000;` t
 
 1. **Nạp kho mã thật** ở `admin.html` (CSV: `service,code,offer,cond,expires,url,pool`), kiểm tra bảng kho.
 2. **Load test trên chính máy chủ thật**, bot chạy từ **máy khác** (không chạy chung máy):
-   `node load-test-simulate-many-players-websocket.js 3000 wss://live-sandeal.inet.vn/ws`
+   `node server/load-test-simulate-many-players-websocket.js 3000 wss://live-sandeal.inet.vn/ws`
    Đạt khi: không mã trùng, không ai vượt giới hạn, độ trễ p95 < 300 ms. Trong lúc chạy, xem "Trễ vòng lặp p99" ở trang quản trị (< 50 ms là khoẻ).
 3. **Chạy thử nội bộ** 1 phiên với nhân viên iNET trên điện thoại thật (4G + wifi).
 4. Sau mỗi phiên: tải CSV đối soát ở trang quản trị, chuyển cho Kinh doanh.
