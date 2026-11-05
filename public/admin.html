@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Quản trị Live Săn Mã | iNET</title>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+<style>
+:root{--blue:#024799;--blue-500:#0582D4;--red:#cc0e0e;--ink:#0F1E2D;--n50:#F4F7FA;--n200:#D0DAE6;--n600:#4A6278;--ok:#0B7A55}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Be Vietnam Pro',system-ui,sans-serif;background:var(--n50);color:var(--ink)}
+header{background:var(--blue);color:#fff;padding:14px 20px;font-weight:800;font-size:18px}
+main{max-width:1000px;margin:0 auto;padding:16px;display:grid;gap:16px}
+.card{background:#fff;border:1px solid var(--n200);border-radius:16px;padding:16px}
+h2{margin:0 0 10px;font-size:16px;color:var(--blue)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input[type=password],textarea{font:inherit;border:2px solid var(--n200);border-radius:8px;padding:10px;min-height:44px}
+input[type=password]{flex:1;min-width:220px}
+textarea{width:100%;min-height:140px;font-family:'JetBrains Mono',monospace;font-size:13px}
+button,.btn{font:800 14px inherit;font-family:inherit;border:0;border-radius:8px;padding:0 16px;min-height:44px;background:var(--blue);color:#fff;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}
+button.ghost{background:var(--n50);color:var(--blue);border:2px solid var(--n200)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{background:var(--n50);border-radius:12px;padding:10px 12px}
+.kpi small{display:block;color:var(--n600);font-weight:700;font-size:12px}
+.kpi b{font-size:22px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{text-align:left;padding:7px 8px;border-bottom:1px solid var(--n200)}
+.msg{font-size:13px;color:var(--n600);margin:8px 0 0;white-space:pre-wrap}
+.bad{color:var(--red)} .good{color:var(--ok)}
+code{font-family:'JetBrains Mono',monospace;font-size:12.5px}
+</style>
+</head>
+<body>
+<header>Quản trị Live Săn Mã · Đại Sảnh Nét</header>
+<main>
+  <section class="card">
+    <h2>Đăng nhập</h2>
+    <div class="row"><input type="password" id="tok" placeholder="ADMIN_TOKEN" autocomplete="current-password"><button id="btnLogin" type="button">Kết nối</button></div>
+    <p class="msg">Mã quản trị đặt bằng biến môi trường <code>ADMIN_TOKEN</code> khi chạy máy chủ. Mã chỉ lưu trong tab này.</p>
+  </section>
+
+  <section class="card">
+    <h2>Tình trạng trực tiếp <small id="upd" style="color:var(--n600);font-weight:600"></small></h2>
+    <div class="grid" id="kpis"></div>
+    <h2 style="margin-top:14px">Kho mã (còn / tổng phiên)</h2>
+    <table><thead><tr><th>Dịch vụ</th><th>Còn</th><th>Tổng</th></tr></thead><tbody id="stock"></tbody></table>
+  </section>
+
+  <section class="card">
+    <h2>Nạp kho mã (CSV)</h2>
+    <p class="msg">Mỗi dòng: <code>service,code,offer,cond,expires,url,pool</code>. <code>service</code> ∈ domain, hosting, vps, ssl, email, super. <code>pool</code> để trống = dùng cho mọi phiên, hoặc ghi id phiên (vd. <code>bf-2711-20</code>) để chia kho theo phiên. Mã trùng sẽ bị bỏ qua.</p>
+    <textarea id="csv" placeholder="service,code,offer,cond,expires,url,pool
+hosting,BFHOST-7K2Q,Giảm 50%,Áp dụng gói năm đăng ký mới,30/11/2026,https://inet.vn/hosting,bf-2711-20"></textarea>
+    <div class="row" style="margin-top:8px"><input type="file" id="file" accept=".csv,text/csv"><button id="btnImport" type="button">Nạp vào kho</button></div>
+    <p class="msg" id="impMsg"></p>
+  </section>
+
+  <section class="card">
+    <h2>Đối soát</h2>
+    <div class="row"><button id="btnExport" type="button">Tải danh sách mã đã cấp (CSV)</button></div>
+    <p class="msg">Gồm mã, dịch vụ, người nhận (mã thiết bị + biệt danh), phiên, thời điểm cấp.</p>
+  </section>
+</main>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+let token = sessionStorage.getItem('liveAdminTok') || '';
+$('#tok').value = token;
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const api = (p, opt = {}) => fetch(p, { ...opt, headers: { ...(opt.headers || {}), Authorization: 'Bearer ' + token } });
+const NAMES = { domain:'Tên miền', hosting:'Hosting', vps:'Cloud/VPS', ssl:'SSL', email:'Email', super:'Siêu Deal' };
+
+$('#btnLogin').onclick = () => { token = $('#tok').value.trim(); try { sessionStorage.setItem('liveAdminTok', token); } catch(e){} refresh(); };
+async function refresh(){
+  if (!token) return;
+  try {
+    const r = await api('admin/api/status');
+    if (r.status === 401){ $('#upd').innerHTML = '<span class="bad">Sai mã quản trị</span>'; return; }
+    const s = await r.json();
+    const fmt = t => t ? new Date(t).toLocaleString('vi-VN', { timeZone:'Asia/Ho_Chi_Minh' }) : '—';
+    const ph = { live:'🔴 ĐANG LIVE', lobby:'🟡 Sảnh chờ', ended:'Đã kết thúc', idle:'Chưa tới giờ' }[s.phase] || s.phase;
+    const kp = [
+      ['Pha', ph], ['Phiên', s.session ? s.session.title : '—'], ['Đang online', s.online.toLocaleString('vi-VN')], ['Số sảnh', s.rooms.length],
+      ['Phiên kế tiếp', s.next ? `${s.next.title}` : '—'], ['Live lúc', s.next ? fmt(s.next.start) : '—'],
+      ['CPU tiến trình', s.server.cpuPct + '%'], ['Trễ vòng lặp p99', s.server.loopP99ms + ' ms'], ['RAM', s.server.rssMB + ' MB']
+    ];
+    $('#kpis').innerHTML = kp.map(([k, v]) => `<div class="kpi"><small>${esc(k)}</small><b>${esc(v)}</b></div>`).join('');
+    $('#stock').innerHTML = Object.entries(s.stock).map(([k, [free, total]]) =>
+      `<tr><td>${esc(NAMES[k] || k)}</td><td class="${free ? '' : 'bad'}">${free}</td><td>${total}</td></tr>`).join('');
+    $('#upd').textContent = '· cập nhật ' + new Date().toLocaleTimeString('vi-VN');
+  } catch(e){ $('#upd').innerHTML = '<span class="bad">Mất kết nối máy chủ</span>'; }
+}
+setInterval(refresh, 3000); refresh();
+
+$('#file').onchange = async e => { const f = e.target.files[0]; if (f) $('#csv').value = await f.text(); };
+$('#btnImport').onclick = async () => {
+  const body = $('#csv').value.trim();
+  if (!body) return;
+  $('#impMsg').textContent = 'Đang nạp…';
+  const r = await api('admin/api/codes', { method:'POST', headers:{ 'Content-Type':'text/csv' }, body });
+  const j = await r.json();
+  if (!r.ok){ $('#impMsg').innerHTML = `<span class="bad">${esc(j.error || 'Lỗi')}</span>`; return; }
+  $('#impMsg').innerHTML = `<span class="good">Đã thêm ${j.added} mã</span>, bỏ qua ${j.skipped} mã trùng.` + (j.errors.length ? `\n<span class="bad">${j.errors.map(esc).join('\n')}</span>` : '');
+  refresh();
+};
+$('#btnExport').onclick = async () => {
+  const r = await api('admin/api/export.csv');
+  if (!r.ok) return alert('Không tải được (kiểm tra mã quản trị)');
+  const blob = await r.blob(), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = `ma-da-cap-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};
+})();
+</script>
+</body>
+</html>

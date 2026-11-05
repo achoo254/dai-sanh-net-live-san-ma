@@ -1,0 +1,16 @@
+# Thư viện cài bằng npm
+node_modules/
+# Cơ sở dữ liệu kho mã + tiến độ người chơi (CHỨA MÃ THẬT khi chạy thật — không bao giờ đẩy lên git)
+server/data/
+*.db
+*.db-wal
+*.db-shm
+# Biến môi trường / bí mật
+.env
+.env.*
+*.env
+# Xuất đối soát
+ma-da-cap-*.csv
+# Rác hệ điều hành
+.DS_Store
+Thumbs.db

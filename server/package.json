@@ -1,0 +1,16 @@
+{
+  "name": "dai-sanh-net-live-san-ma",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Máy chủ live săn mã Black Friday 2026 — Đại Sảnh Nét (iNET)",
+  "main": "server-entry-http-static-admin-websocket.js",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node server-entry-http-static-admin-websocket.js",
+    "demo": "node -e \"process.env.DEMO_LOOP='1';require('./server-entry-http-static-admin-websocket.js')\"",
+    "loadtest": "node load-test-simulate-many-players-websocket.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

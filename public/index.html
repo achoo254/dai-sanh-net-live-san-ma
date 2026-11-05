@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Live Săn Mã – Đại Sảnh Nét | iNET Black Friday</title>
+<meta name="description" content="Phiên live săn mã giảm giá Black Friday 2026 của iNET: cùng hàng nghìn người vào Đại Sảnh Nét, giành hộp quà, nhận mã tên miền, hosting, VPS, SSL, email.">
+<meta name="theme-color" content="#024799">
+<meta property="og:title" content="Live Săn Mã Black Friday – Đại Sảnh Nét | iNET">
+<meta property="og:description" content="Vào sảnh đúng giờ, giành hộp quà cùng mọi người, nhận mã giảm giá dịch vụ iNET.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800;900&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/hall-scene.css">
+<link rel="stylesheet" href="assets/live-ui.css">
+</head>
+<body>
+
+<main class="stage" id="stage" aria-label="Live săn mã Đại Sảnh Nét">
+  <header class="top"><div class="pill"><img src="assets/inet-logo.svg" alt="iNET" width="142" height="34"></div></header>
+
+  <div class="livebar">
+    <div class="phase" id="phase"><i></i><span>Đang kết nối…</span></div>
+    <div class="online" id="online" hidden></div>
+  </div>
+  <button class="mute" id="mute" type="button" aria-label="Bật/tắt âm thanh" aria-pressed="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path class="slash" d="M3 3l18 18"/>
+    </svg>
+  </button>
+  <button class="panelbtn" id="panelBtn" type="button" aria-expanded="false" aria-controls="panel">Top · Mã của em</button>
+
+  <div class="hud" id="hud">
+    <div><small id="hClockLbl">Còn lại</small><b id="hClock">--:--</b><div class="bar" id="hBar"><i id="hBarI"></i></div></div>
+    <div><small>Điểm</small><b id="hScore">0</b></div>
+    <div class="combo"><small>Combo</small><b id="hCombo">x1</b></div>
+  </div>
+  <div class="shieldtag" id="shieldTag">Khiên OneShield đang bật</div>
+  <div class="ticker" id="ticker" aria-live="polite"></div>
+
+  <div class="waitbanner" id="wait" hidden>
+    <small id="wLbl">Live bắt đầu sau</small>
+    <b id="wClock">--:--</b>
+    <span id="wSub"></span>
+  </div>
+
+  <aside class="panel" id="panel" aria-label="Bảng xếp hạng và mã của em">
+    <div class="sec"><h3>Top 10 phiên này</h3><ol id="top"></ol><p class="empty" id="topEmpty">Chưa có ai ghi điểm.</p></div>
+    <div class="sec"><h3>Mã của em</h3><div id="myCodes"></div></div>
+  </aside>
+
+  <div class="chips super-row" id="chips"></div>
+  <div class="stunbox" role="status">Bị DDoS! Đơ 3 giây</div>
+  <div class="fx" id="fx" aria-hidden="true"></div>
+  <div class="count" id="count" hidden aria-hidden="true"></div>
+  <div class="netbanner" id="net" hidden role="status">Đang kết nối lại…</div>
+
+  <!-- Vào sảnh -->
+  <div class="overlay sheet" id="screenJoin">
+    <section class="card" aria-labelledby="tJoin">
+      <h1 id="tJoin">Live săn mã <em>Black Friday</em></h1>
+      <p class="sub">Cùng mọi người vào Đại Sảnh Nét đúng giờ, giành hộp quà, gom mảnh và nhận mã giảm giá iNET.</p>
+      <div class="nextinfo" id="nextInfo">Đang tải lịch phiên…</div>
+      <ul class="how">
+        <li><svg aria-hidden="true"><use href="#i-gift"/></svg><span>Hộp quà rơi <b>cùng lúc</b> trên màn hình mọi người, mỗi hộp có <b>số suất có hạn</b>. Chạm nhanh để giành.</span></li>
+        <li><svg aria-hidden="true"><use href="#i-gold"/></svg><span>Gom đủ <b id="needN">5</b> mảnh một dịch vụ là <b>nhận mã ngay</b>, nếu kho còn. <b>Siêu Deal</b> vàng: ai nhanh nhất nhận thẳng mã.</span></li>
+        <li><svg aria-hidden="true"><use href="#i-bug"/></svg><span><b>DDoS đỏ</b> đừng chạm: bị đơ 3 giây. <b>Khiên OneShield</b> giúp miễn nhiễm.</span></li>
+      </ul>
+      <form id="joinForm" novalidate>
+        <label class="field" for="nick">Biệt danh của em</label>
+        <input class="input" id="nick" name="nick" maxlength="16" autocomplete="nickname" placeholder="vd. Quân săn deal" required>
+        <p class="hint">2–16 ký tự, hiện trên bé Nét của em trong sảnh.</p>
+        <div id="ts"></div>
+        <button class="btn primary" type="submit" id="btnJoin">Vào sảnh</button>
+        <p class="err" id="joinErr" hidden></p>
+      </form>
+      <a class="btn ghost" href="luyen-tay.html" style="margin-top:8px">Luyện tay trong lúc chờ</a>
+      <details>
+        <summary>Thể lệ</summary>
+        <ul>
+          <li>Mỗi phiên live kéo dài 5 phút, sảnh mở trước 10 phút. Lịch phiên ghi ở trên.</li>
+          <li>Hộp quà có số suất giới hạn; thứ tự giành do máy chủ ghi nhận, không phụ thuộc thiết bị.</li>
+          <li>Mỗi người tối đa <span id="maxCodes">2</span> mã/phiên, 1 mã cho mỗi dịch vụ/ngày, 1 mã Siêu Deal/ngày. Kho hết thì dừng phát.</li>
+          <li>Mỗi đơn hàng dùng 1 mã, không cộng dồn ưu đãi khác, theo điều kiện và hạn dùng ghi trên mã.</li>
+          <li>Nghiêm cấm dùng công cụ tự động; iNET có quyền thu hồi mã gian lận và thay đổi chương trình khi cần.</li>
+        </ul>
+      </details>
+      <p class="foot">© 2007 iNET — Nhà đăng ký Tên miền Việt Nam và Quốc tế<br>Kinh doanh: <a href="tel:19001232">1900 1232</a> · Kỹ thuật: <a href="tel:19006285">1900 6285</a></p>
+    </section>
+  </div>
+
+  <!-- Kết quả phiên -->
+  <div class="overlay" id="screenResult" hidden>
+    <section class="card" aria-labelledby="tResult">
+      <h1 id="tResult">Phiên đã kết thúc</h1>
+      <div class="score"><b id="rScore">0</b><span>điểm</span></div>
+      <div class="rank" id="rRank"></div>
+      <div id="rCodes"></div>
+      <div class="panel" style="position:static;box-shadow:none;padding:0;background:none"><h3>Top 10</h3><ol id="rTop"></ol></div>
+      <div class="nextinfo" id="rNext"></div>
+      <div class="actions">
+        <button class="btn primary" id="rClose" type="button">Ở lại sảnh chờ phiên sau</button>
+        <div class="two">
+          <a class="btn ghost" href="luyen-tay.html">Luyện tay</a>
+          <button class="btn ghost" id="btnShare" type="button">Chia sẻ</button>
+        </div>
+      </div>
+      <p class="foot">© 2007 iNET — Nhà đăng ký Tên miền Việt Nam và Quốc tế · <a href="tel:19001232">1900 1232</a></p>
+    </section>
+  </div>
+</main>
+
+<script src="assets/hall-scene.js"></script>
+<script src="assets/live-client-websocket-hall-ui.js"></script>
+</body>
+</html>

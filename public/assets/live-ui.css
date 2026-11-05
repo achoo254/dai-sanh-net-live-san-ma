@@ -1,0 +1,122 @@
+/* Đại Sảnh Nét — CSS riêng cho bản LIVE (bổ sung trên hall-scene.css) */
+
+/* Huy hiệu pha + online */
+.livebar{position:absolute;left:10px;top:12px;z-index:31;display:flex;flex-direction:column;gap:6px;max-width:calc(50% - 90px)}
+.phase{display:inline-flex;align-items:center;gap:7px;background:rgba(15,30,45,.82);color:#fff;font-weight:800;font-size:12px;
+  padding:6px 11px;border-radius:99px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);white-space:nowrap;width:max-content}
+.phase i{width:9px;height:9px;border-radius:50%;background:#8fa3b8;flex:none}
+.phase.live i{background:#ff4d4d;box-shadow:0 0 0 0 rgba(255,77,77,.7);animation:pulse 1.4s infinite}
+.phase.lobby i{background:#FBBF24}
+@keyframes pulse{70%{box-shadow:0 0 0 9px rgba(255,77,77,0)}100%{box-shadow:0 0 0 0 rgba(255,77,77,0)}}
+.online{font-size:11.5px;font-weight:700;color:#fff;background:rgba(15,30,45,.62);padding:4px 10px;border-radius:99px;width:max-content}
+
+/* HUD live: không có thanh thời gian kiểu đếm lượt, dùng đồng hồ phiên */
+.stage.joined .hud,.stage.joined .chips{opacity:1}
+.stage.wide .hud{top:72px;width:min(33%,400px)}
+.stage.wide .livebar{max-width:none}
+
+/* Dòng tin */
+.ticker{position:absolute;left:50%;top:128px;transform:translateX(-50%);z-index:30;max-width:calc(100% - 20px);
+  background:rgba(255,255,255,.94);color:var(--ink);font-weight:700;font-size:12.5px;padding:6px 14px;border-radius:99px;
+  box-shadow:0 6px 16px rgba(0,0,0,.25);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transition:opacity .3s}
+.ticker.show{opacity:1}
+.ticker b{color:var(--blue)}
+.stage.wide .ticker{top:20px;left:auto;right:70px;transform:none;max-width:38%}
+
+/* Đếm ngược sảnh chờ */
+.waitbanner{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);z-index:35;text-align:center;
+  background:rgba(15,30,45,.82);color:#fff;border-radius:var(--r-xl);padding:14px 22px;box-shadow:0 16px 40px rgba(0,0,0,.35);min-width:230px}
+.waitbanner small{display:block;font-size:12px;font-weight:700;color:#cfe3ff;letter-spacing:.04em;text-transform:uppercase}
+.waitbanner b{display:block;font-size:44px;font-weight:900;line-height:1.1;font-variant-numeric:tabular-nums;margin:4px 0}
+.waitbanner span{font-size:13px;color:#e6eef7}
+.waitbanner a{color:#ffe27a;font-weight:800}
+.stage.wide .waitbanner{top:34%}
+
+/* Ô tiến độ = mảnh của em + kho mã còn lại */
+.chip .stock{display:block;font-size:10px;font-weight:700;color:var(--n600);margin-top:4px;white-space:nowrap}
+.chip.done .stock{color:#e8fff4}
+.chip.out{background:#f3e8e8}
+.chip.out .stock{color:var(--red)}
+.chips.super-row{grid-template-columns:repeat(6,1fr)}
+.chip.super{background:linear-gradient(#fff6d6,#ffe9a6)}
+.chip.super .stock{color:#7a4a00}
+
+/* Suất còn lại trên hộp */
+.item .slots{position:absolute;right:-6px;top:-8px;min-width:24px;height:24px;padding:0 6px;border-radius:12px;background:var(--blue);color:#fff;
+  font:800 12px/24px var(--font);text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+.item .slots.low{background:var(--red)}
+.seat.taken-mine .item{filter:grayscale(.2) brightness(.95)}
+.seat.taken-mine .item svg{animation:none!important;opacity:.55}
+.seat.t-super .item{width:70%;right:-30%}
+.seat.t-super::before{background:radial-gradient(circle,rgba(255,207,58,.95),rgba(255,207,58,0) 65%)!important;width:170%}
+
+/* Bị DDoS → đơ */
+.stage.stunned .seats{filter:grayscale(.85) brightness(.85)}
+.stunbox{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);z-index:45;background:var(--red);color:#fff;font-weight:900;
+  font-size:18px;padding:10px 18px;border-radius:99px;box-shadow:0 8px 24px rgba(0,0,0,.35);display:none;white-space:nowrap}
+.stage.stunned .stunbox{display:block}
+
+/* Siêu Deal sắp tới */
+.superwarn{position:absolute;left:50%;top:30%;transform:translateX(-50%);z-index:46;background:linear-gradient(#fff3c2,#ffcf3a);color:#5a3400;
+  border:3px solid #a86a00;font-weight:900;font-size:18px;padding:10px 20px;border-radius:99px;box-shadow:0 10px 30px rgba(0,0,0,.4);white-space:nowrap;
+  animation:toast 1.8s ease-out forwards;pointer-events:none}
+
+/* Bảng bên phải (máy tính) / ngăn kéo (điện thoại) */
+.panel{position:absolute;z-index:32;background:rgba(255,255,255,.95);border-radius:var(--r-lg);box-shadow:0 12px 32px rgba(0,0,0,.3);
+  padding:12px 14px;font-size:13px;color:var(--ink);overflow:auto}
+.panel h3{margin:0 0 8px;font-size:13px;font-weight:900;color:var(--blue);text-transform:uppercase;letter-spacing:.04em}
+.panel ol{margin:0;padding-left:22px;line-height:1.75}
+.panel ol li span{float:right;font-weight:800;font-variant-numeric:tabular-nums;color:var(--blue)}
+.panel ol li.me{font-weight:800;color:var(--ok)}
+.panel .empty{color:var(--n600);font-size:12.5px;margin:0}
+.panel .sec + .sec{margin-top:12px;padding-top:10px;border-top:1px solid var(--n200)}
+.stage.wide .panel{right:14px;top:84px;width:min(24%,290px);max-height:calc(100% - 200px);display:block}
+.stage:not(.wide) .panel{left:8px;right:8px;bottom:84px;max-height:46%;display:none}
+.stage:not(.wide) .panel.open{display:block}
+.panelbtn{position:absolute;right:10px;top:64px;z-index:31;height:40px;padding:0 14px;border-radius:99px;border:0;background:#fff;color:var(--blue);
+  font:800 13px var(--font);box-shadow:0 4px 12px rgba(0,0,0,.25);cursor:pointer}
+.stage.wide .panelbtn{display:none}
+/* Điện thoại: dời nhãn LIVE xuống dưới logo, thu gọn HUD + hàng 6 ô */
+.stage:not(.wide) .ticker{top:auto;bottom:84px}
+.stage:not(.wide) .livebar{top:68px;max-width:62%}
+.stage:not(.wide) .panelbtn{top:68px;height:36px;padding:0 12px;font-size:12px}
+.stage:not(.wide) .phase{font-size:11px;padding:5px 9px}
+.stage:not(.wide) .online{font-size:10.5px}
+.stage:not(.wide) .hud{top:132px}
+.stage:not(.wide) .hud>div{min-height:40px;padding:5px 9px}
+.stage:not(.wide) .hud b{font-size:16px}
+.stage:not(.wide) .shieldtag{top:184px}
+.stage:not(.wide) .chips{gap:3px;padding:5px}
+.chip{min-width:0;overflow:hidden}
+.stage:not(.wide) .chip span{font-size:9.5px}
+.stage:not(.wide) .chip .pips{gap:2px}
+.stage:not(.wide) .chip .pips i{width:6px;height:6px}
+.stage:not(.wide) .chip .stock{font-size:9px}
+.mycode{display:flex;gap:6px;align-items:center;margin:6px 0}
+.mycode code{flex:1;font:700 13px 'JetBrains Mono',monospace;color:var(--blue);background:var(--n50);border:1px dashed var(--blue-300);border-radius:8px;padding:6px 8px;user-select:all;overflow-wrap:anywhere}
+.mycode small{display:block;font-size:11px;color:var(--n600);font-weight:700}
+.mycode .copy{min-height:36px;padding:0 10px;font-size:12px}
+
+/* Thẻ nhận mã */
+.overlay.codepop .card{max-width:420px;text-align:center}
+.codepop h1{font-size:22px}
+.codepop .code{text-align:left}
+
+/* Form vào sảnh */
+.field{display:block;margin:10px 0 4px;font-weight:800;font-size:13px}
+.input{width:100%;min-height:48px;border:2px solid var(--n200);border-radius:var(--r-lg);padding:0 14px;font:600 16px var(--font);color:var(--ink);background:#fff}
+.input:focus{outline:none;border-color:var(--blue-500);box-shadow:0 0 0 3px rgba(5,130,212,.2)}
+.hint{font-size:12px;color:var(--n600);margin:4px 0 10px}
+.err{color:var(--red);font-weight:700;font-size:12.5px;margin:6px 0 0}
+.nextinfo{background:var(--n50);border:1px solid var(--n200);border-radius:var(--r-lg);padding:10px 12px;margin:10px 0;font-size:13px;line-height:1.45}
+.nextinfo b{color:var(--blue)}
+.cf-turnstile{margin:8px 0}
+.netbanner{position:absolute;left:50%;bottom:90px;transform:translateX(-50%);z-index:70;background:var(--warn);color:#fff;font-weight:800;font-size:13px;
+  padding:8px 14px;border-radius:99px;box-shadow:0 6px 16px rgba(0,0,0,.3);white-space:nowrap}
+
+/* Nhãn biệt danh người chơi khác trên ghế phía sau */
+.nick{position:absolute;left:50%;bottom:calc(100% + 2px);transform:translateX(-50%);white-space:nowrap;z-index:3;max-width:180%;overflow:hidden;text-overflow:ellipsis;
+  background:rgba(15,30,45,.78);color:#fff;font-weight:700;font-size:10.5px;padding:3px 7px;border-radius:99px}
+.seat.decor.taken{opacity:1;filter:none}
+.seat.decor .nick{display:block}
+.seat.decor .nick[hidden]{display:none}
