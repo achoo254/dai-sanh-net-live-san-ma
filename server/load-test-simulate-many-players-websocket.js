@@ -11,6 +11,9 @@
 'use strict';
 const WebSocket = require('ws');
 const WR = require('../public/assets/world-map-rules-shared.js');
+const outLines = [];
+const origLog = console.log;
+console.log = (...a) => { outLines.push(a.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ')); origLog(...a); };
 
 const N = +(process.argv[2] || 300);
 const URL = process.argv[3] || 'ws://localhost:8790/ws';
@@ -98,9 +101,6 @@ setInterval(() => {
 }, 100);
 
 const pct = (arr, q) => { if (!arr.length) return 0; const s = [...arr].sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor(q * s.length))]; };
-const outLines = [];
-const origLog = console.log;
-console.log = (...a) => { outLines.push(a.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ')); origLog(...a); };
 function report(){
   const codes = st.codes.map(c => c.code), dup = codes.length - new Set(codes).size;
   const per = {}; st.codes.forEach(c => (per[c.pid] = per[c.pid] || []).push(c.service));
@@ -128,6 +128,10 @@ function report(){
   setTimeout(() => process.exit(pass ? 0 : 1), 300);
 }
 
+// Chạy như service trên OneDash: cần mở 1 cổng để qua health check; cổng này trả về tiến độ/báo cáo dạng chữ
+if (process.env.PORT) require('http').createServer((q, r) => { r.setHeader('Content-Type', 'text/plain; charset=utf-8'); r.end(outLines.join('\n') + '\n' + progressLine()); }).listen(+process.env.PORT, '127.0.0.1');
+const progressLine = () => `tiến độ: kết nối ${st.connected}/${N} · nhặt ${st.picks} · mã ${st.codes.length} · ${sawLive ? (sawEnd ? 'đã hết phiên' : 'ĐANG LIVE') : 'chờ live'}`;
+if (process.env.RESULT_FILE) setInterval(() => { try { require('fs').writeFileSync(process.env.RESULT_FILE, outLines.join('\n') + '\n' + progressLine() + '\n'); } catch(e){} }, 10000);
 console.log(`Mở ${N} kết nối tới ${URL} …`);
 let i = 0;
 // OPEN_RATE = số kết nối mở mỗi 100ms (mặc định 50 = 500/giây; qua Internet/TLS nên để 5–10 cho giống người thật vào rải rác)
