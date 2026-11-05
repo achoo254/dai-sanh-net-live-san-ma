@@ -50,27 +50,29 @@ const config = {
   liveSec: num(env.LIVE_SEC, 300),              // mỗi phiên live 5 phút
 
   // Luật chơi
-  roomCap: num(env.ROOM_CAP, 300),              // tối đa người/sảnh, đông hơn thì mở sảnh mới
+  roomCap: num(env.ROOM_CAP, 100),              // tối đa người/sảnh (phải gửi vị trí liên tục nên để ~100), đông hơn mở sảnh mới
   piecesToUnlock: num(env.PIECES, 5),           // gom đủ N mảnh của 1 dịch vụ → nhận mã
   maxCodesPerSession: num(env.MAX_CODES_SESSION, 2),
   maxCodesPerServicePerDay: 1,
   maxSuperPerDay: 1,
-  slotRatio: num(env.SLOT_RATIO, 0.2),          // mỗi hộp quà có K = ceil(số người trong sảnh × 20%) suất
-  slotMax: num(env.SLOT_MAX, 20),
+  slotRatio: num(env.SLOT_RATIO, 0.15),         // mỗi hộp quà có K = ceil(số người trong sảnh × 15%) suất
+  slotMax: num(env.SLOT_MAX, 10),
   superSlotsPerDrop: num(env.SUPER_SLOTS, 5),
   superAtFractions: [0.18, 0.58, 0.93],         // Siêu Deal xuất hiện ở ~phút 1, 3, 5 của phiên 5 phút
   superWarnMs: 5000,
-  dropTtlMs: 2300,                              // hộp tồn tại 2,3 giây (dư cho độ trễ mạng)
-  dropEveryMs: [1100, 650],                     // nhịp thả hộp: đầu phiên → cuối phiên
-  maxActiveDrops: 4,
+  dropTtlMs: 7000,                              // hộp nằm trên sàn 7 giây (đủ thời gian chạy tới)
+  superTtlMs: 6000,
+  dropEveryMs: [900, 550],                      // nhịp thả hộp: đầu phiên → cuối phiên
+  maxActiveDrops: 10,
+  bugBase: 3, bugMax: 8,                        // số bọ DDoS: 3 + 1 con mỗi 25 người, tối đa 8
   stunMs: 3000,                                 // chạm DDoS bị "đơ" 3 giây
   shieldMs: 5000,
   points: { gift:10, super:50, shieldBlock:5 },
   comboAt: 5,                                   // giành liên tiếp ≥5 hộp thì điểm ×2
 
   // Chống lạm dụng
-  tapRatePerSec: 8,                             // tối đa 8 lần chạm/giây/người
-  maxMsgPerSec: 20,                             // quá ngưỡng này liên tục thì ngắt kết nối
+  moveRatePerSec: 15,                           // tối đa 15 gói vị trí/giây/người (trình duyệt gửi ~10)
+  maxMsgPerSec: 25,                             // quá ngưỡng này liên tục thì ngắt kết nối
   // Nhà mạng di động VN dùng chung 1 IP cho rất nhiều thuê bao (CGNAT) → để rộng, chống bot bằng Turnstile + giới hạn chạm
   maxConnPerIp: num(env.MAX_CONN_PER_IP, 200),
 

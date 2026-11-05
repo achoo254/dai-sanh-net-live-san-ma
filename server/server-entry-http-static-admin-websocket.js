@@ -142,6 +142,7 @@ async function verifyTurnstile(token, ip){
     return !!(await r.json()).success;
   } catch(e){ console.error('[turnstile]', e.message); return false; }
 }
+const AVATARS = ['wave', 'shield', 'thumb', 'idea', 'book', 'support'];
 const cleanNick = s => String(s || '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 16);
 
 wss.on('connection', (ws, req, ip) => {
@@ -152,13 +153,13 @@ wss.on('connection', (ws, req, ip) => {
   const helloTimer = setTimeout(() => { if (!player) ws.close(4000, 'Hết thời gian chào'); }, 10000);
 
   // Giới hạn tốc độ: cửa sổ 1 giây
-  let winStart = Date.now(), msgs = 0, taps = 0, strikes = 0;
+  let winStart = Date.now(), msgs = 0, moves = 0, strikes = 0;
 
   ws.on('message', async raw => {
     const now = Date.now();
     if (now - winStart >= 1000){
       if (msgs > cfg.maxMsgPerSec) strikes++; else strikes = Math.max(0, strikes - 1);
-      winStart = now; msgs = 0; taps = 0;
+      winStart = now; msgs = 0; moves = 0;
     }
     if (++msgs > cfg.maxMsgPerSec * 3 || strikes >= 3) return ws.close(4008, 'Gửi quá nhanh');
     let m; try { m = JSON.parse(raw); } catch(e){ return; }
@@ -168,20 +169,22 @@ wss.on('connection', (ws, req, ip) => {
       if (player || joining) return;
       joining = true;
       const pid = String(m.pid || ''), nick = cleanNick(m.nick);
+      const avatar = AVATARS.includes(m.avatar) ? m.avatar : 'wave';
       if (!/^[A-Za-z0-9_-]{8,40}$/.test(pid)) return ws.close(4002, 'Mã thiết bị không hợp lệ');
       if (nick.length < 2) return ws.close(4003, 'Biệt danh cần 2–16 ký tự');
       if (!(await verifyTurnstile(m.ts, ip))) return ws.close(4004, 'Xác minh chống bot không thành công');
       if (ws.readyState !== 1) return;
       clearTimeout(helloTimer);
-      player = hub.join(ws, { pid, nick, ip });
+      player = hub.join(ws, { pid, nick, avatar, ip });
       return;
     }
     if (!player || player.ws !== ws) return;
-    if (m.t === 'tap'){
-      if (++taps > cfg.tapRatePerSec) return;               // chạm quá nhanh → bỏ qua (chống auto-click)
-      if (hub.state.phase !== 'live' || !player.room) return;
-      if (typeof m.d !== 'string' || m.d.length > 24) return;
-      player.room.tap(player, m.d);
+    if (!player.room) return;
+    if (m.t === 'mv'){
+      if (++moves > cfg.moveRatePerSec) return;             // gửi vị trí quá dày → bỏ qua
+      player.room.move(player, +m.x, +m.y);
+    } else if (m.t === 'emo'){
+      player.room.emote(player, m.i);
     }
   });
   ws.on('close', () => {

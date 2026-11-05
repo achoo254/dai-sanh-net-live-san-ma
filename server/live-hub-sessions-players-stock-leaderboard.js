@@ -1,20 +1,20 @@
 /* =============================================================================
  * Bộ điều phối sự kiện live
  * - Theo dõi pha (sảnh chờ → live → kết thúc) theo lịch, báo cho mọi người
- * - Chia người chơi vào các sảnh (tối đa cfg.roomCap/sảnh), mọi sảnh dùng CHUNG kho mã
+ * - Chia người chơi vào các sảnh (tối đa cfg.roomCap/sảnh, mỗi người 1 nhân vật đi lại), mọi sảnh dùng CHUNG kho mã
  * - Giữ trạng thái người chơi (mảnh, điểm, mã) để rớt mạng vào lại không mất
  * - Cấp mã theo giới hạn: tối đa N mã/phiên, 1 mã/dịch vụ/ngày, 1 Siêu Deal/ngày
  * - Bảng xếp hạng, tồn kho, dòng tin, số người online
  * ============================================================================= */
 'use strict';
-const { Room } = require('./live-room-drops-slots-and-taps');
+const { Room } = require('./live-room-world-movement-drops-bugs');
 const { phaseAt } = require('./session-schedule-phase-calculator');
 
 const vnDay = ts => new Date(ts + 7 * 3600e3).toISOString().slice(0, 10);
 
 class Player {
-  constructor(pid, nick){
-    this.pid = pid; this.nick = nick;
+  constructor(pid, nick, avatar){
+    this.pid = pid; this.nick = nick; this.avatar = avatar;
     this.ws = null; this.ip = ''; this.room = null;
     this.resetSession(null);
   }
@@ -58,7 +58,7 @@ class Hub {
       setInterval(() => this.flushFeed(), 600)
     ];
   }
-  stop(){ (this.timers || []).forEach(clearInterval); this.rooms.forEach(r => r.stopLive()); this.flushProgress(); }
+  stop(){ (this.timers || []).forEach(clearInterval); this.rooms.forEach(r => r.destroy()); this.flushProgress(); }
 
   /* ---------- Pha & phiên ---------- */
   sessionId(){ return this.state.session ? this.state.session.id : null; }
@@ -84,7 +84,7 @@ class Hub {
       p.resetSession(session.id);
     }
     // Gộp lại sảnh: bỏ các sảnh trống (giữ sảnh số 1)
-    this.rooms = this.rooms.filter((r, i) => i === 0 || r.size > 0);
+    this.rooms = this.rooms.filter((r, i) => { const keep = i === 0 || r.size > 0; if (!keep) r.destroy(); return keep; });
     this.refreshStock(session.id);
     this.lastTop = '';
   }
@@ -102,13 +102,13 @@ class Hub {
   }
 
   /* ---------- Người chơi ---------- */
-  join(ws, { pid, nick, ip }){
+  join(ws, { pid, nick, avatar, ip }){
     let p = this.players.get(pid);
     if (p && p.ws && p.ws !== ws){
       try { p.ws.close(4001, 'Đã mở ở thiết bị/tab khác'); } catch(e){}
     }
-    if (!p){ p = new Player(pid, nick); this.players.set(pid, p); }
-    p.nick = nick; p.ws = ws; p.ip = ip;
+    if (!p){ p = new Player(pid, nick, avatar); this.players.set(pid, p); }
+    p.nick = nick; p.avatar = avatar; p.ws = ws; p.ip = ip;
     const sid = this.sessionId();
     if (sid && p.session !== sid){
       p.resetSession(sid);
@@ -118,9 +118,13 @@ class Hub {
       p.codes = this.store.myCodes(pid, sid);
       p.codes.forEach(c => p.claimed.add(c.service));
     }
-    if (!p.room) this.assignRoom(p);
+    if (p.room) p.room.remove(p);              // vào lại (đổi tab/mạng) → xuất hiện lại trong sảnh
+    this.assignRoom(p);
     p.reply({
-      t:'welcome', you:{ pid, nick }, room: p.room.id,
+      t:'welcome', you:{ pid, nick, avatar, rid: p.rid, x: Math.round(p.x), y: Math.round(p.y) }, room: p.room.id,
+      roster: p.room.roster().filter(r => r[0] !== p.rid),
+      drops: p.room.live ? [...p.room.drops.values()].map(d => ({ id:d.id, kind:d.kind, svc:d.svc, x:Math.round(d.x), y:Math.round(d.y),
+              slots:d.slots - d.takers.size, ttl: Math.max(0, d.until - Date.now()), mine: d.takers.has(pid) })) : [],
       services: this.cfg.services, need: this.cfg.piecesToUnlock, maxCodes: this.cfg.maxCodesPerSession,
       state:{ score:p.score, pieces:p.pieces, codes:p.codes, claimed:[...p.claimed] },
       stock: this.stockMsg().s
@@ -221,10 +225,7 @@ class Hub {
   }
   broadcastPresence(){
     const online = this.rooms.reduce((n, r) => n + r.size, 0);
-    for (const r of this.rooms){
-      const nicks = [...r.members].slice(-16).map(p => p.nick);
-      r.broadcast({ t:'room', room:r.id, n:r.size, online, rooms:this.rooms.length, nicks });
-    }
+    for (const r of this.rooms) r.broadcast({ t:'room', room:r.id, n:r.size, online, rooms:this.rooms.length });
   }
   flushFeed(){
     if (!this.feedQ.length) return;

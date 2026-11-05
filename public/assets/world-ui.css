@@ -1,0 +1,60 @@
+/* Đại Sảnh Nét Online — giao diện riêng bản thế giới đi lại (bổ sung trên hall-scene.css + live-ui.css) */
+
+#world{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:pointer;background:#3b1f0c}
+.stage{background:#3b1f0c}
+
+/* Bản đồ nhỏ */
+.mini{position:absolute;z-index:31;right:10px;top:64px;width:200px;height:125px;border-radius:12px;border:3px solid #fff;
+  box-shadow:0 6px 16px rgba(0,0,0,.35);background:#d9a35f;pointer-events:none;opacity:0;transition:opacity .3s}
+.stage.joined .mini{opacity:1}
+.stage.wide .panel{top:200px;max-height:calc(100% - 300px)}
+.stage:not(.wide) .mini{top:112px;width:128px;height:80px;border-width:2px}
+.stage:not(.wide) .hud{right:146px}
+
+.stage:not(.joined) .panel,.stage:not(.joined) .panelbtn{display:none!important}
+
+/* HUD 2 ô */
+.hud{grid-template-columns:1.3fr 1fr}
+
+/* Biểu cảm */
+.emotebar{position:absolute;z-index:33;right:12px;bottom:88px;display:flex;flex-direction:column;align-items:flex-end;gap:8px;opacity:0;pointer-events:none;transition:opacity .3s}
+.stage.joined .emotebar{opacity:1;pointer-events:auto}
+.emobtn{width:52px;height:52px;border-radius:50%;border:0;background:#fff;font-size:26px;box-shadow:0 6px 16px rgba(0,0,0,.3);cursor:pointer}
+.emotes{display:none;flex-direction:column;gap:6px;order:-1}
+.emotes.open{display:flex}
+.emotes button{border:0;background:#fff;color:var(--ink);font:800 13px var(--font);padding:9px 14px;border-radius:99px;box-shadow:0 4px 12px rgba(0,0,0,.25);
+  cursor:pointer;text-align:right;min-height:40px}
+.emotes button:hover{background:var(--n50)}
+.stage.wide .emotebar{bottom:96px}
+.stage.wide .emotes{display:flex}
+.stage.wide .emobtn{display:none}
+.stage.wide .emotes button{font-size:12px;padding:7px 12px;min-height:34px}
+
+/* Cần điều khiển ảo */
+.joy{position:absolute;z-index:34;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;
+  background:rgba(255,255,255,.18);border:3px solid rgba(255,255,255,.6);pointer-events:none}
+.joy i{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px 0 0 -25px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 4px 10px rgba(0,0,0,.3)}
+
+/* Chọn nhân vật */
+.avatars{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin:6px 0 4px}
+.av{border:2px solid var(--n200);background:#fff;border-radius:12px;padding:6px 2px 4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;min-height:44px}
+.av img{width:100%;max-width:52px;height:62px;object-fit:contain}
+.av span{font-size:9.5px;font-weight:700;color:var(--n600);line-height:1.15;text-align:center}
+.av.on{border-color:var(--blue);background:#EEF5FF;box-shadow:0 0 0 3px rgba(5,130,212,.25)}
+.av.on span{color:var(--blue)}
+@media (max-width:420px){ .avatars{grid-template-columns:repeat(3,1fr)} .av img{height:54px} }
+
+/* Màu từng dịch vụ trên ô tiến độ */
+.chip{border-top:4px solid var(--c, transparent)}
+.chip .pips i.on{background:var(--c, var(--blue-500))}
+.chip.done{background:var(--c, var(--ok))}
+.chip.super{border-top-color:#E5A900}
+
+/* Đơ / khiên */
+.stage.stunned #world{filter:grayscale(.7)}
+.stage.stunned .stunbox{display:block}
+.stage .seats{display:none}
+
+/* Thẻ vào sảnh trên máy tính rộng hơn để chứa 6 nhân vật */
+.stage.wide .overlay.sheet .card{max-width:560px}
+.how svg{width:26px;height:26px}
