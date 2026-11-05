@@ -1,6 +1,8 @@
 /* =============================================================================
  * Load test Đại Sảnh Nét Online: N người chơi ảo cùng vào sảnh, ĐI BỘ tới hộp quà gần nhất
  *   node server/load-test-simulate-many-players-websocket.js [N=300] [ws://localhost:8790/ws] [timeoutSec=600]
+ *   OPEN_RATE=8 (kết nối/100ms) khi test qua Internet; VERBOSE=1 in thêm thống kê bot thường/gian lận
+ *   RESULT_FILE=/đường/dẫn.txt ghi báo cáo ra file; KEEP_ALIVE=1 giữ tiến trình sau khi xong (chạy như service trên máy chủ)
  * - 95% bot đi đúng tốc độ, gửi vị trí 10 lần/giây
  * - 5% bot GIAN LẬN: dịch chuyển tức thời tới hộp → máy chủ phải kéo về (đếm số lần bị chỉnh)
  * Báo cáo: kết nối, số hộp nhặt, độ trễ (gửi vị trí → nhận "nhặt được"), mã trùng, vượt giới hạn,
@@ -96,6 +98,9 @@ setInterval(() => {
 }, 100);
 
 const pct = (arr, q) => { if (!arr.length) return 0; const s = [...arr].sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor(q * s.length))]; };
+const outLines = [];
+const origLog = console.log;
+console.log = (...a) => { outLines.push(a.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ')); origLog(...a); };
 function report(){
   const codes = st.codes.map(c => c.code), dup = codes.length - new Set(codes).size;
   const per = {}; st.codes.forEach(c => (per[c.pid] = per[c.pid] || []).push(c.service));
@@ -116,12 +121,18 @@ function report(){
   const pass = st.connected === N && dup === 0 && overSession === 0 && overService === 0 && st.picks > 0;
   console.log(pass ? '✅ ĐẠT' : '❌ CHƯA ĐẠT');
   bots.forEach(b => { try { b.ws.close(); } catch(e){} });
+  // RESULT_FILE: ghi báo cáo ra file (dùng khi chạy bot trên máy chủ, đọc lại qua trình quản lý file)
+  if (process.env.RESULT_FILE){ try { require('fs').writeFileSync(process.env.RESULT_FILE, outLines.join('\n') + '\n'); } catch(e){ origLog('không ghi được RESULT_FILE:', e.message); } }
+  // KEEP_ALIVE=1: không thoát (khi chạy như service, tránh bị khởi động lại chạy test lặp)
+  if (process.env.KEEP_ALIVE === '1'){ origLog('[xong] giữ tiến trình sống, dừng project để kết thúc'); setInterval(() => {}, 1 << 30); return; }
   setTimeout(() => process.exit(pass ? 0 : 1), 300);
 }
 
 console.log(`Mở ${N} kết nối tới ${URL} …`);
 let i = 0;
-const opener = setInterval(() => { for (let k = 0; k < 50 && i < N; k++) bot(i++); if (i >= N) clearInterval(opener); }, 100);
+// OPEN_RATE = số kết nối mở mỗi 100ms (mặc định 50 = 500/giây; qua Internet/TLS nên để 5–10 cho giống người thật vào rải rác)
+const RATE = +(process.env.OPEN_RATE || 50);
+const opener = setInterval(() => { for (let k = 0; k < RATE && i < N; k++) bot(i++); if (i >= N) clearInterval(opener); }, 100);
 const watch = setInterval(() => {
   process.stdout.write(`\r  kết nối ${st.connected}/${N} · nhặt ${st.picks} · mã ${st.codes.length} · ${sawLive ? (sawEnd ? 'đã hết phiên' : 'ĐANG LIVE') : 'chờ live'}   `);
   if (sawEnd){ clearInterval(watch); setTimeout(report, 1500); }
