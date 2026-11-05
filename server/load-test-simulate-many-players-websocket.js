@@ -16,7 +16,7 @@ const TIMEOUT = +(process.argv[4] || 600) * 1000;
 const runId = Math.random().toString(36).slice(2, 7);
 const AV = ['wave', 'shield', 'thumb', 'idea', 'book', 'support'];
 
-const st = { connected:0, closed:0, closeCodes:{}, errors:{}, mv:0, picks:0, stuns:0, corrections:0, codes:[], results:0,
+const st = { puzzles:0, solved:0, wrong:0, fails:0, timeouts:0, cluesSeen:0, ansNoReveal:0, connected:0, closed:0, closeCodes:{}, errors:{}, mv:0, picks:0, stuns:0, corrections:0, codes:[], results:0,
              lat:[], cheatTeleports:0, cheatPicksAfterTeleport:0 };
 let sawLive = false, sawEnd = false;
 const bots = [];
@@ -40,9 +40,27 @@ function bot(i){
         st.picks++; b.picks++; b.drops.delete(m.id);
         if (b.lastMvAt) st.lat.push(Date.now() - b.lastMvAt);
         if (b.cheater && Date.now() - b.lastTeleport < 400) st.cheatPicksAfterTeleport++;
-        if (m.code) st.codes.push({ pid:b.pid, ...m.code });
         break;
       case 'result': st.results++; break;
+      case 'puzzle': {
+        st.puzzles++;
+        // Máy chủ chạy thử với LOADTEST_REVEAL_ANSWERS=1 mới gửi kèm đáp án; 25% bot trả lời sai 1 lần trước, 10% bỏ mặc cho hết giờ
+        if (!m._answer){ st.ansNoReveal++; break; }
+        const r = Math.random();
+        if (r < 0.10) break;
+        const wrongFirst = r < 0.35;
+        setTimeout(() => { if (ws.readyState !== 1) return;
+          if (wrongFirst){ ws.send(JSON.stringify({ t:'ans', id:m.id, a:'SAIROI' })); setTimeout(() => ws.readyState === 1 && ws.send(JSON.stringify({ t:'ans', id:m.id, a:m._answer.toLowerCase() })), 1500); }
+          else ws.send(JSON.stringify({ t:'ans', id:m.id, a:m._answer.toLowerCase() }));
+        }, 1500 + Math.random() * 3000);
+        break;
+      }
+      case 'ans_r':
+        if (m.ok){ st.solved++; st.codes.push({ pid:b.pid, ...m.code }); }
+        else if (!m.slow) st.wrong++;
+        break;
+      case 'puzzle_end': if (m.reason === 'timeout') st.timeouts++; else st.fails++; break;
+      case 'clue': st.cluesSeen++; break;
     }
   });
   ws.on('close', code => { st.closed++; st.closeCodes[code] = (st.closeCodes[code] || 0) + 1; });
@@ -90,6 +108,7 @@ function report(){
   const avg = l => l.length ? (l.reduce((a, b) => a + b.picks, 0) / l.length).toFixed(1) : '0';
   console.log(`Trung bình hộp/người: bot đi đúng luật ${avg(bots.filter(b => !b.cheater))} · bot gian lận ${avg(bots.filter(b => b.cheater))}`);
   console.log(`Bot gian lận: tốc biến ${st.cheatTeleports} lần · máy chủ kéo về ${st.corrections} lần · nhặt ngay sau tốc biến: ${st.cheatPicksAfterTeleport}`);
+  console.log(`Mật thư: mở ${st.puzzles} · giải đúng ${st.solved} · trả lời sai ${st.wrong} · hết lượt ${st.fails} · hết giờ ${st.timeouts} · manh mối đã đọc ${st.cluesSeen}${st.ansNoReveal ? ' · (máy chủ không gửi đáp án → bot không giải: ' + st.ansNoReveal + ')' : ''}`);
   console.log(`Mã đã nhận: ${codes.length} · MÃ TRÙNG: ${dup} · vượt 2 mã/phiên: ${overSession} · 2 mã cùng dịch vụ: ${overService}`);
   console.log(`Nhận màn kết quả: ${st.results}/${st.connected}`);
   if (process.env.VERBOSE){ const grp = c => bots.filter(b => b.cheater === c); const f = (l, k) => (l.reduce((a, b) => a + b[k], 0) / l.length).toFixed(0);

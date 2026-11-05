@@ -2,6 +2,8 @@
  * Kho mã giảm giá (SQLite, module node:sqlite có sẵn trong Node ≥ 22.13)
  * - Cấp mã NGUYÊN TỬ: 1 câu UPDATE ... RETURNING trên 1 kết nối duy nhất,
  *   Node chạy đơn luồng nên không bao giờ cấp trùng 1 mã cho 2 người.
+ * - GIỮ CHỖ mã trong lúc người chơi giải mật thư (reserved_by/reserved_until), hết giờ tự trả lại kho.
+ * - Ngân hàng đề mật thư (MKT nạp CSV) + thống kê tỉ lệ giải từng đề.
  * - Lưu tiến độ người chơi (mảnh, điểm) để máy chủ khởi động lại không mất.
  * - Nhập kho bằng CSV, xuất danh sách đã cấp để đối soát.
  * ============================================================================= */
@@ -26,22 +28,44 @@ class CodeStore {
       );
       CREATE INDEX IF NOT EXISTS idx_codes_free ON codes(service, pool) WHERE issued_to IS NULL;
       CREATE INDEX IF NOT EXISTS idx_codes_owner ON codes(issued_to, issued_day);
+      CREATE TABLE IF NOT EXISTS puzzles(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tier INTEGER NOT NULL, type TEXT NOT NULL DEFAULT 'text', question TEXT NOT NULL,
+        answers TEXT NOT NULL,            -- nhiều đáp án đúng cách nhau bằng |
+        hint1 TEXT, hint2 TEXT, clues TEXT NOT NULL DEFAULT '[]',
+        source TEXT NOT NULL DEFAULT 'mkt', active INTEGER NOT NULL DEFAULT 1, created_at INTEGER
+      );
+      CREATE TABLE IF NOT EXISTS puzzle_stats(
+        key TEXT PRIMARY KEY, opened INTEGER NOT NULL DEFAULT 0, solved INTEGER NOT NULL DEFAULT 0,
+        failed INTEGER NOT NULL DEFAULT 0, total_ms INTEGER NOT NULL DEFAULT 0
+      );
       CREATE TABLE IF NOT EXISTS progress(
         session TEXT NOT NULL, pid TEXT NOT NULL, nick TEXT,
         score INTEGER NOT NULL DEFAULT 0, pieces TEXT NOT NULL DEFAULT '{}',
         updated_at INTEGER, PRIMARY KEY(session, pid)
       );
     `);
+    // Thêm cột giữ chỗ cho kho cũ (đã tạo từ bản trước)
+    const cols = this.db.prepare(`PRAGMA table_info(codes)`).all().map(c => c.name);
+    if (!cols.includes('reserved_by')) this.db.exec(`ALTER TABLE codes ADD COLUMN reserved_by TEXT; ALTER TABLE codes ADD COLUMN reserved_until INTEGER;`);
+    const FREE = `issued_to IS NULL AND (reserved_until IS NULL OR reserved_until < ?)`;
     this.q = {
-      issue: this.db.prepare(`
-        UPDATE codes SET issued_to = ?, issued_nick = ?, issued_session = ?, issued_day = ?, issued_at = ?
-        WHERE code = (SELECT code FROM codes WHERE service = ? AND issued_to IS NULL AND (pool = ? OR pool = '')
+      // Giữ chỗ 1 mã còn trống (nguyên tử, đơn luồng → không 2 người giữ cùng 1 mã)
+      reserve: this.db.prepare(`
+        UPDATE codes SET reserved_by = ?, reserved_until = ?
+        WHERE code = (SELECT code FROM codes WHERE service = ? AND ${FREE} AND (pool = ? OR pool = '')
                       ORDER BY pool DESC, rowid LIMIT 1)
+        RETURNING code`),
+      // Giải đúng → chuyển mã đang giữ thành đã cấp
+      confirm: this.db.prepare(`
+        UPDATE codes SET issued_to = ?, issued_nick = ?, issued_session = ?, issued_day = ?, issued_at = ?, reserved_by = NULL, reserved_until = NULL
+        WHERE code = ? AND reserved_by = ? AND issued_to IS NULL
         RETURNING code, service, offer, cond, expires, url`),
+      release: this.db.prepare(`UPDATE codes SET reserved_by = NULL, reserved_until = NULL WHERE code = ? AND reserved_by = ? AND issued_to IS NULL`),
       countDayService: this.db.prepare(`SELECT COUNT(*) n FROM codes WHERE issued_to = ? AND service = ? AND issued_day = ?`),
       countSession: this.db.prepare(`SELECT COUNT(*) n FROM codes WHERE issued_to = ? AND issued_session = ? AND service <> 'super'`),
       mine: this.db.prepare(`SELECT code, service, offer, cond, expires, url FROM codes WHERE issued_to = ? AND issued_session = ? ORDER BY issued_at`),
-      stock: this.db.prepare(`SELECT service, SUM(issued_to IS NULL AND (pool = '' OR pool = ?)) free,
+      stock: this.db.prepare(`SELECT service, SUM(${FREE} AND (pool = '' OR pool = ?)) free,
                               SUM(issued_session IS NOT NULL AND issued_session = ?) used FROM codes GROUP BY service`),
       insert: this.db.prepare(`INSERT OR IGNORE INTO codes(code, service, pool, offer, cond, expires, url) VALUES(?,?,?,?,?,?,?)`),
       total: this.db.prepare(`SELECT COUNT(*) n FROM codes`),
@@ -51,14 +75,31 @@ class CodeStore {
                                  ON CONFLICT(session, pid) DO UPDATE SET nick = excluded.nick, score = excluded.score,
                                  pieces = excluded.pieces, updated_at = excluded.updated_at`),
       loadProg: this.db.prepare(`SELECT score, pieces FROM progress WHERE session = ? AND pid = ?`),
-      topSession: this.db.prepare(`SELECT nick, score FROM progress WHERE session = ? ORDER BY score DESC LIMIT ?`)
+      topSession: this.db.prepare(`SELECT nick, score FROM progress WHERE session = ? ORDER BY score DESC LIMIT ?`),
+      pzCount: this.db.prepare(`SELECT COUNT(*) n FROM puzzles`),
+      pzInsert: this.db.prepare(`INSERT INTO puzzles(tier, type, question, answers, hint1, hint2, clues, source, created_at) VALUES(?,?,?,?,?,?,?,?,?)`),
+      pzRandom: this.db.prepare(`SELECT * FROM puzzles WHERE tier = ? AND active = 1 ORDER BY RANDOM() LIMIT 1`),
+      pzCountTier: this.db.prepare(`SELECT COUNT(*) n FROM puzzles WHERE tier = ? AND active = 1`),
+      pzOffSample: this.db.prepare(`UPDATE puzzles SET active = 0 WHERE source = 'sample'`),
+      pzList: this.db.prepare(`SELECT p.id, p.tier, p.type, p.question, p.source, p.active, s.opened, s.solved, s.failed, s.total_ms
+                               FROM puzzles p LEFT JOIN puzzle_stats s ON s.key = 'bank:' || p.id ORDER BY p.tier, p.id`),
+      statOpen: this.db.prepare(`INSERT INTO puzzle_stats(key, opened) VALUES(?, 1) ON CONFLICT(key) DO UPDATE SET opened = opened + 1`),
+      statSolved: this.db.prepare(`UPDATE puzzle_stats SET solved = solved + 1, total_ms = total_ms + ? WHERE key = ?`),
+      statFailed: this.db.prepare(`UPDATE puzzle_stats SET failed = failed + 1 WHERE key = ?`),
+      statGen: this.db.prepare(`SELECT * FROM puzzle_stats WHERE key LIKE 'gen:%'`)
     };
   }
 
-  /** Cấp 1 mã của dịch vụ cho người chơi. Trả về null nếu hết kho. */
-  issue(service, { pid, nick, session, day }){
-    return this.q.issue.get(pid, nick, session, day, Date.now(), service, session) || null;
+  /** Giữ chỗ 1 mã của dịch vụ trong holdMs. Trả về mã (string) hoặc null nếu hết kho. */
+  reserve(service, { pid, session, holdMs }){
+    const now = Date.now(), r = this.q.reserve.get(pid, now + holdMs, service, now, session || '');
+    return r ? r.code : null;
   }
+  /** Xác nhận cấp mã đang giữ (giải đúng). Trả về thông tin mã hoặc null nếu không còn giữ. */
+  confirm(code, { pid, nick, session, day }){
+    return this.q.confirm.get(pid, nick, session, day, Date.now(), code, pid) || null;
+  }
+  release(code, pid){ this.q.release.run(code, pid); }
   countDayService(pid, service, day){ return this.q.countDayService.get(pid, service, day).n; }
   countSession(pid, session){ return this.q.countSession.get(pid, session).n; }
   myCodes(pid, session){ return this.q.mine.all(pid, session); }
@@ -66,7 +107,7 @@ class CodeStore {
   /** Tồn kho cho phiên: { service: { free, total } } — total = còn lại + đã phát trong phiên này */
   stock(session){
     const out = {};
-    for (const r of this.q.stock.all(session || '', session || '')){
+    for (const r of this.q.stock.all(Date.now(), session || '', session || '')){
       const free = r.free | 0, used = r.used | 0;
       out[r.service] = { free, total: free + used };
     }
@@ -118,6 +159,54 @@ class CodeStore {
     this.db.exec('COMMIT');
     return n;
   }
+
+  /* ---------- Ngân hàng mật thư ---------- */
+  seedSamplePuzzles(kit){
+    if (this.q.pzCount.get().n > 0) return 0;
+    let n = 0; const now = Date.now();
+    this.db.exec('BEGIN');
+    for (const f of kit.SAMPLE_FILL){ this.q.pzInsert.run(1, 'fill', f.question, f.answers.join('|'), f.hint1, f.hint2, '[]', 'sample', now); n++; }
+    for (const c of kit.SAMPLE_CLUES){ this.q.pzInsert.run(3, 'clues', c.question, c.answers.join('|'), c.hint1, c.hint2, JSON.stringify(c.clues), 'sample', now); n++; }
+    this.db.exec('COMMIT');
+    return n;
+  }
+  bankCount(tier){ return this.q.pzCountTier.get(tier).n; }
+  randomPuzzle(tier){
+    const r = this.q.pzRandom.get(tier);
+    if (!r) return null;
+    return { key:'bank:' + r.id, type:r.type, question:r.question, answers:r.answers.split('|').map(x => x.trim()).filter(Boolean),
+             hint1:r.hint1 || '', hint2:r.hint2 || '', clues: JSON.parse(r.clues || '[]') };
+  }
+  /** CSV đề: tier,type,question,answers,hint1,hint2,clue_spot1,clue1,clue_spot2,clue2,clue_spot3,clue3 */
+  importPuzzlesCsv(text, { replaceSample, validSpots }){
+    const rows = parseCsv(text);
+    if (rows.length && /^tier$/i.test((rows[0][0] || '').trim())) rows.shift();
+    let added = 0; const errors = []; const now = Date.now();
+    this.db.exec('BEGIN');
+    try {
+      if (replaceSample) this.q.pzOffSample.run();
+      rows.forEach((r, i) => {
+        const c = r.map(x => (x || '').trim());
+        if (!c.join('')) return;
+        const tier = +c[0], type = c[1] || 'text', question = c[2], answers = c[3];
+        if (![1, 2, 3].includes(tier)){ errors.push(`Dòng ${i + 1}: cấp phải là 1, 2 hoặc 3`); return; }
+        if (!question || !answers){ errors.push(`Dòng ${i + 1}: thiếu đề hoặc đáp án`); return; }
+        const clues = [];
+        for (const k of [6, 8, 10]){
+          if (!c[k] && !c[k + 1]) continue;
+          if (!validSpots.includes(c[k])){ errors.push(`Dòng ${i + 1}: điểm manh mối "${c[k]}" không có (dùng: ${validSpots.join(', ')})`); return; }
+          clues.push({ spot:c[k], text:c[k + 1] || '' });
+        }
+        if (tier === 3 && !clues.length){ errors.push(`Dòng ${i + 1}: đề cấp 3 cần ít nhất 1 manh mối`); return; }
+        this.q.pzInsert.run(tier, type, question, answers, c[4] || '', c[5] || '', JSON.stringify(clues), 'mkt', now); added++;
+      });
+      this.db.exec('COMMIT');
+    } catch(e){ this.db.exec('ROLLBACK'); throw e; }
+    return { added, errors: errors.slice(0, 50) };
+  }
+  statOpen(key){ this.q.statOpen.run(key); }
+  statResult(key, solved, ms){ solved ? this.q.statSolved.run(Math.round(ms), key) : this.q.statFailed.run(key); }
+  puzzleReport(){ return { bank: this.q.pzList.all(), generated: this.q.statGen.all() }; }
 
   /** Ghi tiến độ hàng loạt (gọi định kỳ 1 giây/lần). */
   saveProgress(list){

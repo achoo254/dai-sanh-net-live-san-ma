@@ -3,22 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Đại Sảnh Nét Online – Săn Mã Black Friday | iNET</title>
-<meta name="description" content="Dắt bé Nét của em đi khắp Đại Sảnh Nét, cùng mọi người chạy tới nhặt hộp quà và nhận mã giảm giá tên miền, hosting, VPS, SSL, email của iNET dịp Black Friday 2026.">
+<title>iNET Tech Office 3D – Săn Mã Black Friday | iNET</title>
+<meta name="description" content="Vào văn phòng công nghệ 3D của iNET, phối đồ nhân vật, chạy tới nhặt hộp quà cùng mọi người và giải mật thư để nhận mã giảm giá tên miền, hosting, cloud, SSL, email dịp Black Friday 2026.">
 <meta name="theme-color" content="#024799">
-<meta property="og:title" content="Đại Sảnh Nét Online – Săn mã Black Friday | iNET">
-<meta property="og:description" content="Mỗi người một bé Nét, đi lại trong sảnh, chạy tới nhặt hộp quà, nhận mã giảm giá dịch vụ iNET.">
+<meta property="og:title" content="iNET Tech Office 3D – Săn mã Black Friday">
+<meta property="og:description" content="Nhân vật 3D, văn phòng công nghệ, hộp quà, mật thư và mã giảm giá thật của iNET.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800;900&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/hall-scene.css">
 <link rel="stylesheet" href="assets/live-ui.css">
 <link rel="stylesheet" href="assets/world-ui.css">
+<link rel="stylesheet" href="assets/office3d-glass-ui-puzzle-customizer.css">
 </head>
 <body>
 
-<main class="stage" id="stage" aria-label="Đại Sảnh Nét Online – săn mã Black Friday">
-  <canvas id="world" aria-label="Bản đồ Đại Sảnh Nét: chạm vào sàn để đi tới, kéo để điều khiển, hoặc dùng phím mũi tên"></canvas>
+<main class="stage" id="stage" aria-label="iNET Tech Office 3D – săn mã Black Friday">
+  <canvas id="world" aria-label="Văn phòng iNET: chạm vào sàn để đi tới, kéo để điều khiển, hoặc dùng phím mũi tên"></canvas>
 
   <header class="top"><div class="pill"><img src="assets/inet-logo.svg" alt="iNET" width="142" height="34"></div></header>
   <div class="livebar">
@@ -31,7 +32,7 @@
     </svg>
   </button>
   <button class="panelbtn" id="panelBtn" type="button" aria-expanded="false" aria-controls="panel">Top · Mã của em</button>
-  <canvas class="mini" id="mini" width="240" height="150" aria-label="Bản đồ nhỏ"></canvas>
+  <canvas class="mini" id="mini" width="240" height="150" aria-label="Sơ đồ văn phòng"></canvas>
 
   <div class="hud" id="hud">
     <div><small>Còn lại</small><b id="hClock">--:--</b><div class="bar" id="hBar"><i id="hBarI"></i></div></div>
@@ -51,6 +52,9 @@
     <div class="sec"><h3>Mã của em</h3><div id="myCodes"></div></div>
   </aside>
 
+  <!-- Mật thư -->
+  <section class="puzzle" id="puzzle" hidden aria-live="polite" aria-label="Mật thư"></section>
+
   <div class="emotebar">
     <button class="emobtn" id="emoBtn" type="button" aria-label="Biểu cảm">😊</button>
     <div class="emotes" id="emotes"></div>
@@ -58,37 +62,41 @@
   <div class="joy" id="joy" hidden aria-hidden="true"><i></i></div>
 
   <div class="chips super-row" id="chips"></div>
-  <div class="stunbox" role="status">Bị DDoS! Đơ 3 giây</div>
+  <div class="stunbox" role="status">Dính DDoS! Đơ 3 giây</div>
   <div class="fx" id="fx" aria-hidden="true"></div>
   <div class="count" id="count" hidden aria-hidden="true"></div>
   <div class="netbanner" id="net" hidden role="status">Đang kết nối lại…</div>
 
-  <!-- Vào sảnh -->
+  <!-- Vào văn phòng -->
   <div class="overlay sheet" id="screenJoin">
-    <section class="card" aria-labelledby="tJoin">
-      <h1 id="tJoin">Đại Sảnh Nét <em>Online · Black Friday</em></h1>
-      <p class="sub" id="joinSub">Dắt bé Nét của em đi khắp sảnh, chạy tới nhặt hộp quà cùng mọi người và nhận mã giảm giá iNET.</p>
+    <section class="card join3d" aria-labelledby="tJoin">
+      <h1 id="tJoin">iNET Tech Office <em>Săn mã Black Friday</em></h1>
+      <p class="sub" id="joinSub">Phối đồ nhân vật, vào văn phòng công nghệ của iNET, chạy tới nhặt hộp quà cùng mọi người và <b>giải mật thư</b> để nhận mã giảm giá.</p>
       <div class="nextinfo" id="nextInfo">Đang tải lịch phiên…</div>
       <form id="joinForm" novalidate>
-        <span class="field">Chọn bé Nét của em</span>
-        <div class="avatars" id="avatars" role="group" aria-label="Chọn nhân vật"></div>
+        <div class="cz">
+          <div class="cz-preview"><canvas id="preview" aria-label="Xem trước nhân vật"></canvas><span class="cz-no3d">Máy này chưa hỗ trợ 3D,<br>game sẽ chạy bản 2D.</span></div>
+          <div class="cz-opts" id="custom" role="group" aria-label="Phối đồ nhân vật"></div>
+        </div>
         <label class="field" for="nick">Biệt danh</label>
         <input class="input" id="nick" name="nick" maxlength="16" autocomplete="nickname" placeholder="vd. Quân săn deal" required>
         <div id="ts"></div>
-        <button class="btn primary" type="submit" id="btnJoin">Vào sảnh</button>
+        <button class="btn primary" type="submit" id="btnJoin">Vào văn phòng</button>
         <p class="err" id="joinErr" hidden></p>
       </form>
       <a class="btn ghost" id="practiceLink" href="?mode=practice" style="margin-top:8px">Luyện tay trong lúc chờ</a>
       <ul class="how">
-        <li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#024799"/><path d="M8 12h8M12 8v8" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg><span><b>Chạm vào sàn</b> để đi tới, <b>kéo</b> để điều khiển, máy tính dùng <b>phím mũi tên/WASD</b>.</span></li>
-        <li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="9" width="16" height="11" rx="2" fill="#ff6fa0"/><rect x="3" y="6" width="18" height="5" rx="2" fill="#ff8fb7"/><rect x="11" y="6" width="2" height="14" fill="#ffe27a"/></svg><span>Hộp quà rơi quanh 5 quầy, <b>ai tới trước nhặt được</b> (mỗi hộp có số suất). Gom đủ <b id="needN">5</b> mảnh một dịch vụ là nhận mã.</span></li>
-        <li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="#cc0e0e"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke="#7a0707" stroke-width="2.4" stroke-linecap="round"/></svg><span><b>Né bọ DDoS</b> (đụng là đơ 3 giây). <b>Siêu Deal</b> xuất hiện ở bục giữa, có báo trước 5 giây.</span></li>
+        <li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#024799"/><path d="M8 12h8M12 8v8" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg><span><b>Chạm sàn</b> để đi, <b>kéo</b> để điều khiển, máy tính dùng <b>phím mũi tên/WASD</b>, lăn chuột để zoom.</span></li>
+        <li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="9" width="16" height="11" rx="2" fill="#0582D4"/><rect x="3" y="6" width="18" height="5" rx="2" fill="#619ee9"/><rect x="11" y="6" width="2" height="14" fill="#ffe27a"/></svg><span>Hộp quà rơi quanh 5 khu dịch vụ, <b>ai tới trước nhặt được</b>. Gom đủ <b id="needN">5</b> mảnh một dịch vụ là mở <b>mật thư</b>.</span></li>
+        <li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2" fill="#ffcf3a"/><path d="M3 7l9 6 9-6" fill="none" stroke="#7a4a00" stroke-width="2"/></svg><span><b>Giải mật thư</b> về dịch vụ iNET để nhận mã (mã được giữ 90 giây cho em). Coupon càng cao, đề càng khó; cấp 3 phải <b>đi tìm manh mối</b> trong văn phòng.</span></li>
+        <li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="#cc0e0e"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke="#7a0707" stroke-width="2.4" stroke-linecap="round"/></svg><span><b>Né virus DDoS</b> (đụng là đơ 3 giây). <b>Siêu Deal</b> rơi ở bục giữa atrium, có báo trước 5 giây.</span></li>
       </ul>
       <details>
         <summary>Thể lệ</summary>
         <ul>
-          <li>Mỗi phiên live kéo dài 5 phút, sảnh mở trước 10 phút để đi dạo, ghé quầy.</li>
-          <li>Thứ tự nhặt hộp do máy chủ ghi nhận; nhân vật đi quá tốc độ cho phép sẽ bị kéo về vị trí hợp lệ.</li>
+          <li>Mỗi phiên live kéo dài 8 phút, văn phòng mở trước 10 phút để đi dạo, phối đồ, ghé các khu.</li>
+          <li>Thứ tự nhặt hộp và chấm mật thư do máy chủ ghi nhận; nhân vật đi quá tốc độ cho phép sẽ bị kéo về vị trí hợp lệ.</li>
+          <li>Mật thư: 3 lần thử, mã được giữ 90 giây. Hết lượt hoặc hết giờ thì mã trả lại kho, gom lại mảnh để thử đề khác.</li>
           <li>Mỗi người tối đa <span id="maxCodes">2</span> mã/phiên, 1 mã cho mỗi dịch vụ/ngày, 1 mã Siêu Deal/ngày. Kho hết thì dừng phát.</li>
           <li>Mỗi đơn hàng dùng 1 mã, không cộng dồn ưu đãi khác, theo điều kiện và hạn dùng ghi trên mã.</li>
           <li>Nghiêm cấm công cụ tự động; iNET có quyền thu hồi mã gian lận và thay đổi chương trình khi cần.</li>
@@ -108,7 +116,7 @@
       <div class="panel" style="position:static;box-shadow:none;padding:0;background:none;display:block"><h3>Top 10</h3><ol id="rTop"></ol></div>
       <div class="nextinfo" id="rNext"></div>
       <div class="actions">
-        <button class="btn primary" id="rClose" type="button">Ở lại sảnh chờ phiên sau</button>
+        <button class="btn primary" id="rClose" type="button">Ở lại văn phòng chờ phiên sau</button>
         <div class="two">
           <a class="btn ghost" id="rAlt" href="?mode=practice">Luyện tay</a>
           <button class="btn ghost" id="btnShare" type="button">Chia sẻ</button>
@@ -120,9 +128,12 @@
 </main>
 
 <script src="assets/world-map-rules-shared.js"></script>
+<script src="assets/puzzle-cipher-generator-shared.js"></script>
 <script src="assets/world-sprites-svg-and-mascots.js"></script>
 <script src="assets/world-renderer-canvas-hall-avatars.js"></script>
 <script src="assets/world-practice-local-simulation.js"></script>
+<script src="assets/office-character-customizer-ui.js"></script>
+<script src="assets/puzzle-panel-secret-letter-ui.js"></script>
 <script src="assets/world-client-net-input-ui.js"></script>
 </body>
 </html>

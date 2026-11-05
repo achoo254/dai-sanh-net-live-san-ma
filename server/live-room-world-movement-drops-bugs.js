@@ -68,6 +68,7 @@ class Room {
     p.budget = Math.max(0, p.budget - Math.hypot(n.x - p.x, n.y - p.y));
     if (n.x !== p.x || n.y !== p.y){ p.x = n.x; p.y = n.y; p.moved = true; }
     if (corrected) p.reply({ t:'pos', x: r1(p.x), y: r1(p.y) });
+    if (p.puzzle) this.hub.checkClues(p);       // đi tới điểm giấu manh mối mật thư cấp 3
     if (this.live) this.checkPickups(p, now);
   }
   emote(p, i){

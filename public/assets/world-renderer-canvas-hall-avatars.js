@@ -1,5 +1,5 @@
 /* =============================================================================
- * Đại Sảnh Nét Online — vẽ thế giới bằng Canvas 2D
+ * iNET Tech Office — bản 2D DỰ PHÒNG (máy không hỗ trợ WebGL/3D), vẽ bằng Canvas 2D
  * - Nền sảnh (tường, cửa sổ, sàn gỗ, thảm xanh, bục Siêu Deal) vẽ sẵn 1 lần vào canvas ẩn
  * - Mỗi khung hình: quầy + bé Nét đứng quầy, nhân vật người chơi, hộp quà, bọ DDoS,
  *   sắp theo chiều sâu (y), camera bám theo nhân vật của mình
@@ -64,7 +64,7 @@ window.WorldRenderer = (() => {
     g.fillStyle = 'rgba(0,0,0,.14)'; for (let x = 0; x < W; x += 58) g.fillRect(x, 0, 2, WALL_Y);
     const wins = [140, 560, 1640, 2060];
     wins.forEach(x => {
-      const wy = 70, ww = 240, wh = 180;
+      const wy = 14, ww = 240, wh = 86;
       const sky = g.createLinearGradient(0, wy, 0, wy + wh); sky.addColorStop(0, '#dff3ff'); sky.addColorStop(.55, '#bfe6a8'); sky.addColorStop(1, '#8fcf74');
       g.fillStyle = sky; g.fillRect(x, wy, ww, wh);
       g.fillStyle = '#3f8a39'; [[.2, .85, 50], [.55, .8, 62], [.88, .9, 48]].forEach(([fx, fy, r]) => { g.beginPath(); g.arc(x + fx * ww, wy + fy * wh, r, 0, 7); g.fill(); });
@@ -81,8 +81,7 @@ window.WorldRenderer = (() => {
     g.fillStyle = '#4a2a12'; g.fillRect(0, WALL_Y - 14, W, 14);
     g.fillStyle = 'rgba(255,220,170,.25)'; g.fillRect(0, WALL_Y - 14, W, 2);
     // Băng rôn + đèn
-    if (SP.img.banner.naturalWidth) g.drawImage(SP.img.banner, W / 2 - 230, 26, 460, 187);
-    [330, 860, 1540, 2070].forEach(x => { if (SP.img.lamp.naturalWidth) g.drawImage(SP.img.lamp, x - 30, 30, 60, 112); });
+    if (WALL_Y >= 250 && SP.img.banner.naturalWidth) g.drawImage(SP.img.banner, W / 2 - 230, 26, 460, 187);
     // Bóng chân tường
     gr = g.createLinearGradient(0, WALL_Y, 0, WALL_Y + 60); gr.addColorStop(0, 'rgba(40,20,5,.35)'); gr.addColorStop(1, 'rgba(40,20,5,0)');
     g.fillStyle = gr; g.fillRect(0, WALL_Y, W, 60);
@@ -122,7 +121,9 @@ window.WorldRenderer = (() => {
       return h;
     }
     function drawAvatar(a, t, isMe){
-      const im = SP.mascot[a.avatar] || SP.mascot.wave;
+      // Bản 3D gửi chuỗi phối đồ → bản 2D đổi sang 1 trong 6 hình bé Nét (cố định theo chuỗi)
+      let hsh = 0; for (const ch of String(a.avatar)) hsh = (hsh * 31 + ch.charCodeAt(0)) >>> 0;
+      const im = SP.mascot[a.avatar] || SP.mascot[SP.AVATARS[hsh % SP.AVATARS.length]] || SP.mascot.wave;
       if (!im.naturalWidth) return;
       const hgt = 118, wid = hgt * im.naturalWidth / im.naturalHeight;
       const stunned = a.stunUntil > t, bob = a.moving && !stunned ? -Math.abs(Math.sin(t / 85)) * 6 : 0;
@@ -206,7 +207,7 @@ window.WorldRenderer = (() => {
       ctx.drawImage(im, b.x - wid / 2, b.y + 40 - hgt, wid, hgt);
     }
     function drawScreen(text, sub, live){
-      const x = W / 2, y = 250, w = 300, h = 58;
+      const x = W / 2, y = Math.max(40, WALL_Y / 2), w = 300, h = 58;
       roundRect(ctx, x - w / 2, y - h / 2, w, h, 10); ctx.fillStyle = '#0d1117'; ctx.fill();
       ctx.lineWidth = 4; ctx.strokeStyle = live ? '#ff4d4d' : '#ffcf3a'; ctx.stroke();
       ctx.fillStyle = live ? '#ff6b64' : '#ffe27a'; ctx.font = `700 13px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -228,10 +229,20 @@ window.WorldRenderer = (() => {
       // Gom thực thể rồi sắp theo y để có chiều sâu
       const ents = [];
       for (const id in BOOTHS){
-        const o = OBSTACLES.find(x => x.id === id);
+        const o = OBSTACLES.find(x => x.id === id && x.kind === 'counter');
         ents.push({ y: BOOTHS[id].y - 1, f: () => drawNpc(id) });
-        ents.push({ y: o.y + o.h, f: () => drawCounter(id, o, S.stock, S.names) });
+        if (o) ents.push({ y: o.y + o.h, f: () => drawCounter(id, o, S.stock, S.names) });
       }
+      // Nội thất văn phòng khác (bản 2D vẽ dạng khối có nhãn)
+      const KIND = { serverroom:['#24303f', 'PHÒNG MÁY CHỦ · CLOUD'], reception:['#f7f9fc', 'LỄ TÂN'], logowall:['#1d2b3f', 'iNET'],
+                     desks:['#e8d6b8', 'Khu làm việc'], meeting:['#cfe8ff', ''], pantry:['#f2f4f7', 'Pantry'], sofa:['#5b6b8c', 'Sofa'] };
+      OBSTACLES.filter(o => KIND[o.kind]).forEach(o => ents.push({ y: o.y + o.h, f: () => {
+        const [c, label] = KIND[o.kind];
+        roundRect(ctx, o.x, o.y, o.w, o.h, 10); ctx.fillStyle = c; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 3; ctx.stroke();
+        const t = o.name || label; if (!t) return;
+        ctx.fillStyle = ['serverroom', 'logowall', 'sofa'].includes(o.kind) ? '#ffffff' : '#24303f';
+        ctx.font = `800 18px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t, o.x + o.w / 2, o.y + o.h / 2);
+      } }));
       OBSTACLES.filter(o => o.kind === 'plant').forEach(o => ents.push({ y: o.y + o.h, f: () => {
         if (SP.img.plant.naturalWidth) ctx.drawImage(SP.img.plant, o.x - 20, o.y + o.h - 150, 120, 160);
       } }));

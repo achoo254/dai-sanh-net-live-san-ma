@@ -2,28 +2,29 @@
 
 Mã nguồn: `02-web/game/dai-sanh-net-san-deal-blackfriday/` · GitHub (riêng tư): `achoo254/dai-sanh-net-live-san-ma`
 
-**Bản v5 "Đại Sảnh Nét Online":** mỗi người chơi điều khiển 1 bé Nét đi lại trong sảnh, chạy tới nhặt hộp quà.
+**Bản v6 "iNET Tech Office 3D":** nhân vật người 3D (phối đồ) đi lại trong văn phòng công nghệ 3D (Three.js), nhặt hộp quà, gom 5 mảnh → **giải mật thư** mới nhận mã. Máy không hỗ trợ WebGL tự chuyển bản 2D (thêm `?2d` để ép).
 
 ```
-package.json               ← npm install / npm start ở thư mục gốc
+package.json                     ← npm install / npm start ở thư mục gốc
 public/
-  index.html               ← trang chính (vào sảnh, đi lại, săn mã). ?mode=practice = Luyện tay
-  luyen-tay.html           ← chuyển hướng sang ./?mode=practice
-  admin.html               ← quản trị (nạp kho mã, theo dõi, xuất đối soát)
-  assets/world-map-rules-shared.js         ← luật bản đồ DÙNG CHUNG máy chủ + trình duyệt
-  assets/world-renderer-canvas-hall-avatars.js ← vẽ sảnh + nhân vật (Canvas 2D)
-  assets/world-client-net-input-ui.js      ← điều khiển, kết nối, giao diện
-  assets/world-practice-local-simulation.js← máy chủ giả cho Luyện tay (8 bot, không phát mã)
-  assets/world-sprites-svg-and-mascots.js  ← hình vẽ + 6 ảnh bé Nét
+  index.html                     ← trang chính. ?mode=practice = Luyện tay · ?2d = ép bản 2D
+  admin.html                     ← quản trị: kho mã, MẬT THƯ (nạp đề + thống kê), đối soát
+  vendor/three.module.min.js     ← Three.js 0.170 (MIT, đóng gói sẵn, không phụ thuộc CDN)
+  assets/office3d-office-scene-renderer.js   ← dựng văn phòng 3D + vẽ thế giới, camera, tối ưu theo khoảng cách
+  assets/office3d-human-avatar-factory.js    ← nhân vật người 3D dựng bằng code, phối đồ, hoạt cảnh, xem trước
+  assets/world-map-rules-shared.js           ← mặt bằng văn phòng, vật cản, 5 khu, 6 điểm manh mối (máy chủ + trình duyệt)
+  assets/puzzle-cipher-generator-shared.js   ← bộ sinh đề + chấm đáp án (máy chủ + Luyện tay)
+  assets/puzzle-panel-secret-letter-ui.js    ← bảng mật thư (terminal)
+  assets/office-character-customizer-ui.js   ← màn phối đồ
+  assets/world-client-net-input-ui.js        ← điều khiển, kết nối, giao diện
+  assets/world-practice-local-simulation.js  ← máy chủ giả cho Luyện tay (8 bot, có mật thư, không phát mã)
+  assets/world-renderer-canvas-hall-avatars.js ← bản 2D dự phòng
 server/
-  server-entry-http-static-admin-websocket.js   ← file chạy chính
-  live-config-schedule-services-and-limits.js   ← cấu hình, lịch phiên, luật
-  live-hub-sessions-players-stock-leaderboard.js← điều phối phiên, người chơi, kho, BXH
-  live-room-world-movement-drops-bugs.js        ← 1 sảnh: vị trí, chống tốc biến, hộp quà, bọ DDoS
-  code-store-sqlite-atomic-issue-import-export.js ← kho mã SQLite (cấp nguyên tử)
-  session-schedule-phase-calculator.js
-  load-test-simulate-many-players-websocket.js  ← load test (bot đi bộ + 5% bot gian lận)
-  run-demo-loop-local.js                        ← chạy thử tại máy
+  live-hub-sessions-players-stock-leaderboard.js ← phiên, người chơi, kho, BXH, MẬT THƯ (giữ mã, chấm, hết giờ)
+  live-room-world-movement-drops-bugs.js         ← 1 sảnh: vị trí, chống tốc biến, hộp quà, virus, đọc manh mối
+  code-store-sqlite-atomic-issue-import-export.js← kho mã (giữ chỗ/cấp nguyên tử) + ngân hàng đề + thống kê
+  (các file còn lại như v5)
+docs/mau-de-mat-thu-cho-mkt.csv  ← file mẫu để MKT soạn đề
 ```
 
 ## 1. Chạy thử tại máy
@@ -55,7 +56,10 @@ Thêm người chơi ảo cho sảnh đông: `node server/load-test-simulate-man
 | `TRUST_PROXY` | `1` khi chạy sau Nginx (lấy IP thật) | tắt |
 | `DEMO_SEED` | **Đặt `0` khi chạy thật** để không nạp mã minh họa | bật |
 | `SCHEDULE` | Lịch phiên dạng JSON (xem dưới) | 24–30/11, 12:00 và 20:00 |
-| `LOBBY_SEC` / `LIVE_SEC` | Mở sảnh trước bao lâu / mỗi phiên dài bao lâu | `600` / `300` |
+| `LOBBY_SEC` / `LIVE_SEC` | Mở sảnh trước bao lâu / mỗi phiên dài bao lâu | `600` / `480` (8 phút, đủ giải mật thư) |
+| `PUZZLE_TIERS` | Cấp mật thư theo dịch vụ (JSON) | `{"domain":1,"email":1,"hosting":2,"ssl":2,"vps":3,"super":3}` |
+| `PUZZLE_HOLD_SEC` / `PUZZLE_ATTEMPTS` | Giữ mã khi đang giải / số lần thử | `90` / `3` |
+| `LOADTEST_REVEAL_ANSWERS` | **Chỉ để load test** (chỉ có tác dụng khi `DEMO_LOOP=1`): gửi kèm đáp án cho bot. KHÔNG bật khi chạy thật | tắt |
 | `ROOM_CAP` | Số người tối đa mỗi sảnh (gửi vị trí liên tục nên để ~100) | `100` |
 | `PIECES` | Số mảnh để nhận 1 mã | `5` |
 | `MAX_CODES_SESSION` | Mã tối đa mỗi người mỗi phiên (không tính Siêu Deal) | `2` |
@@ -136,6 +140,18 @@ Nâng giới hạn kết nối hệ điều hành: `worker_connections 20000;` t
    Đạt khi: không mã trùng, không ai vượt giới hạn, độ trễ p95 < 300 ms. Trong lúc chạy, xem "Trễ vòng lặp p99" ở trang quản trị (< 50 ms là khoẻ).
 3. **Chạy thử nội bộ** 1 phiên với nhân viên iNET trên điện thoại thật (4G + wifi).
 4. Sau mỗi phiên: tải CSV đối soát ở trang quản trị, chuyển cho Kinh doanh.
+
+## 6b. Mật thư cho MKT
+
+1. Soạn đề theo `docs/mau-de-mat-thu-cho-mkt.csv` (mở bằng Excel, lưu CSV UTF-8).
+2. Vào `admin.html` → mục **Mật thư** → chọn file → (tuỳ chọn) tick "Tắt đề mẫu khi nạp" → **Nạp đề**. Dòng lỗi được báo rõ (cấp sai, thiếu đáp án, điểm manh mối không tồn tại).
+3. Bấm **Xem thống kê** sau mỗi phiên: số lượt mở, giải đúng, sai/hết giờ, thời gian giải trung bình của từng đề → chỉnh độ khó.
+4. Quy tắc: đáp án chỉ nằm trên máy chủ; chấm không phân biệt hoa/thường, có dấu/không dấu, khoảng trắng; mã được giữ 90 giây khi đang giải; sai 3 lần hoặc hết giờ → mã trả lại kho, dịch vụ đó về 0 mảnh.
+5. Điểm giấu manh mối cấp 3: `pantry` (bảng ghim pantry), `server` (vách kính phòng máy chủ), `reception` (quầy lễ tân), `meeting` (cửa phòng họp OneShield), `lounge` (góc sofa), `atrium` (dưới màn LED).
+
+## 6c. Hiệu năng bản 3D (đo 05/11/2026, laptop Intel UHD 620)
+
+Thời gian vẽ 1 khung hình khi 101 nhân vật cùng trên màn hình: **≈ 5,7 ms (p50)**, 390 lệnh vẽ (ban đầu 19,8 ms / 890 lệnh). Tối ưu đã làm: gộp toàn bộ nội thất tĩnh thành 1 lưới; chỉ 30 người gần nhất vẽ đầy đủ (tên, bóng, hoạt cảnh), người xa gộp thành 1 lưới. **Chưa đo trên điện thoại thật** — cần thử trên Android tầm trung trước ngày chạy.
 
 ## 7. Kết quả load test đã chạy (05/11/2026, laptop Windows, bot chạy CHUNG máy với máy chủ)
 

@@ -57,6 +57,22 @@ hosting,BFHOST-7K2Q,Giảm 50%,Áp dụng gói năm đăng ký mới,30/11/2026,
   </section>
 
   <section class="card">
+    <h2>Mật thư (cho MKT)</h2>
+    <p class="msg">Mỗi dòng 1 đề: <code>tier,type,question,answers,hint1,hint2,clue_spot1,clue1,clue_spot2,clue2,clue_spot3,clue3</code>.
+      <code>tier</code> = 1 (dễ), 2 (vừa), 3 (khó hơn chút, cần manh mối). <code>answers</code>: nhiều đáp án đúng cách nhau bằng <code>|</code> (chấm không phân biệt hoa/thường, có dấu/không dấu).
+      Điểm manh mối (cấp 3): <code>pantry</code>, <code>server</code>, <code>reception</code>, <code>meeting</code>, <code>lounge</code>, <code>atrium</code>.
+      Cấp 1–2: game trộn đề MKT với đề tự sinh (mỗi người một đề); cấp 3 chỉ lấy đề MKT.</p>
+    <textarea id="pzCsv" placeholder="tier,type,question,answers,hint1,hint2,clue_spot1,clue1,clue_spot2,clue2
+1,fill,&quot;Điền vào chỗ trống: Website cần ___ để chạy https&quot;,SSL,Viết tắt 3 chữ,Bắt đầu bằng S,,,,
+3,clues,&quot;Ghép [Mảnh 1][Mảnh 2]&quot;,443IDVN,Mảnh 2 dạng .__.vn,Mảnh 1 bắt đầu bằng 4,server,Mảnh 1: cổng HTTPS,pantry,Mảnh 2: đuôi tên miền cá nhân"></textarea>
+    <div class="row" style="margin-top:8px"><input type="file" id="pzFile" accept=".csv,text/csv">
+      <label style="font-size:13px"><input type="checkbox" id="pzReplace"> Tắt đề mẫu khi nạp</label>
+      <button id="btnPz" type="button">Nạp đề</button><button id="btnPzStats" type="button" class="ghost">Xem thống kê</button></div>
+    <p class="msg" id="pzMsg"></p>
+    <table id="pzTable" hidden><thead><tr><th>#</th><th>Cấp</th><th>Đề</th><th>Nguồn</th><th>Mở</th><th>Đúng</th><th>Sai/hết giờ</th><th>TB giải</th></tr></thead><tbody></tbody></table>
+  </section>
+
+  <section class="card">
     <h2>Đối soát</h2>
     <div class="row"><button id="btnExport" type="button">Tải danh sách mã đã cấp (CSV)</button></div>
     <p class="msg">Gồm mã, dịch vụ, người nhận (mã thiết bị + biệt danh), phiên, thời điểm cấp.</p>
@@ -105,6 +121,26 @@ $('#btnImport').onclick = async () => {
   $('#impMsg').innerHTML = `<span class="good">Đã thêm ${j.added} mã</span>, bỏ qua ${j.skipped} mã trùng.` + (j.errors.length ? `\n<span class="bad">${j.errors.map(esc).join('\n')}</span>` : '');
   refresh();
 };
+$('#pzFile').onchange = async e => { const f = e.target.files[0]; if (f) $('#pzCsv').value = await f.text(); };
+$('#btnPz').onclick = async () => {
+  const body = $('#pzCsv').value.trim(); if (!body) return;
+  $('#pzMsg').textContent = 'Đang nạp…';
+  const r = await api('admin/api/puzzles' + ($('#pzReplace').checked ? '?replaceSample=1' : ''), { method:'POST', headers:{ 'Content-Type':'text/csv' }, body });
+  const j = await r.json();
+  if (!r.ok){ $('#pzMsg').innerHTML = `<span class="bad">${esc(j.error || 'Lỗi')}</span>`; return; }
+  $('#pzMsg').innerHTML = `<span class="good">Đã thêm ${j.added} đề.</span>` + (j.errors.length ? `\n<span class="bad">${j.errors.map(esc).join('\n')}</span>` : '');
+  loadPz();
+};
+async function loadPz(){
+  const r = await api('admin/api/puzzles'); if (!r.ok) return;
+  const j = await r.json(), sec = ms => ms ? (ms / 1000).toFixed(0) + 's' : '—';
+  const rows = j.bank.map(p => `<tr style="${p.active ? '' : 'opacity:.45'}"><td>${p.id}</td><td>${p.tier}</td><td>${esc(p.question.slice(0, 70))}</td><td>${p.source === 'sample' ? 'mẫu' : 'MKT'}</td>
+    <td>${p.opened || 0}</td><td>${p.solved || 0}</td><td>${p.failed || 0}</td><td>${sec(p.solved ? p.total_ms / p.solved : 0)}</td></tr>`);
+  j.generated.forEach(g => rows.push(`<tr><td>—</td><td>${g.key === 'gen:anagram' || g.key === 'gen:fill' ? 1 : 2}</td><td>Đề tự sinh: ${esc(g.key.slice(4))}</td><td>tự sinh</td>
+    <td>${g.opened}</td><td>${g.solved}</td><td>${g.failed}</td><td>${sec(g.solved ? g.total_ms / g.solved : 0)}</td></tr>`));
+  $('#pzTable tbody').innerHTML = rows.join(''); $('#pzTable').hidden = false;
+}
+$('#btnPzStats').onclick = loadPz;
 $('#btnExport').onclick = async () => {
   const r = await api('admin/api/export.csv');
   if (!r.ok) return alert('Không tải được (kiểm tra mã quản trị)');

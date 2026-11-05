@@ -109,6 +109,12 @@ const server = http.createServer(async (req, res) => {
         hub.refreshStock();
         return send(res, 200, r);
       }
+      if (p === '/admin/api/puzzles' && req.method === 'GET') return send(res, 200, store.puzzleReport());
+      if (p === '/admin/api/puzzles' && req.method === 'POST'){
+        const text = await readBody(req);
+        return send(res, 200, store.importPuzzlesCsv(text, { replaceSample: url.searchParams.get('replaceSample') === '1',
+                                                            validSpots: Object.keys(require('../public/assets/world-map-rules-shared.js').CLUE_SPOTS) }));
+      }
       if (p === '/admin/api/export.csv' && req.method === 'GET')
         return send(res, 200, '﻿' + store.exportCsv(), 'text/csv; charset=utf-8',
           { 'Content-Disposition': `attachment; filename="ma-da-cap-${new Date().toISOString().slice(0, 10)}.csv"` });
@@ -142,7 +148,6 @@ async function verifyTurnstile(token, ip){
     return !!(await r.json()).success;
   } catch(e){ console.error('[turnstile]', e.message); return false; }
 }
-const AVATARS = ['wave', 'shield', 'thumb', 'idea', 'book', 'support'];
 const cleanNick = s => String(s || '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 16);
 
 wss.on('connection', (ws, req, ip) => {
@@ -169,7 +174,8 @@ wss.on('connection', (ws, req, ip) => {
       if (player || joining) return;
       joining = true;
       const pid = String(m.pid || ''), nick = cleanNick(m.nick);
-      const avatar = AVATARS.includes(m.avatar) ? m.avatar : 'wave';
+      // Phối đồ nhân vật 3D: chuỗi ngắn dạng "g:m|s:2|h:1|hc:0|t:polo|tc:0|a:none" (chỉ chữ thường, số, : | ,)
+      const avatar = typeof m.avatar === 'string' && /^[a-z0-9:|,]{1,80}$/.test(m.avatar) ? m.avatar : 'g:m|s:1|h:0|hc:0|t:polo|tc:0|a:none';
       if (!/^[A-Za-z0-9_-]{8,40}$/.test(pid)) return ws.close(4002, 'Mã thiết bị không hợp lệ');
       if (nick.length < 2) return ws.close(4003, 'Biệt danh cần 2–16 ký tự');
       if (!(await verifyTurnstile(m.ts, ip))) return ws.close(4004, 'Xác minh chống bot không thành công');
@@ -185,6 +191,8 @@ wss.on('connection', (ws, req, ip) => {
       player.room.move(player, +m.x, +m.y);
     } else if (m.t === 'emo'){
       player.room.emote(player, m.i);
+    } else if (m.t === 'ans'){
+      if (typeof m.id === 'string' && typeof m.a === 'string' && m.a.length <= 80) hub.answer(player, m.id, m.a);
     }
   });
   ws.on('close', () => {

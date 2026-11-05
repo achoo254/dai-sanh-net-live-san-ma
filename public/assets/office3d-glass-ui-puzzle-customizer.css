@@ -1,0 +1,71 @@
+/* iNET Tech Office 3D — lớp giao diện "kính mờ" công nghệ + màn phối đồ + bảng mật thư (nạp sau cùng) */
+
+:root{ --glass: rgba(255,255,255,.72); --glass-dark: rgba(13,22,36,.62); --glass-line: rgba(255,255,255,.55); }
+.stage.mode3d, .stage.mode3d #world{ background:#dce7f2 }
+
+/* Kính mờ cho các bảng nổi trên cảnh 3D */
+.stage.mode3d .hud>div{ background:var(--glass-dark); backdrop-filter:blur(12px) saturate(1.2); -webkit-backdrop-filter:blur(12px); box-shadow:inset 0 0 0 1px rgba(255,255,255,.18),0 8px 24px rgba(13,22,36,.25) }
+.stage.mode3d .phase,.stage.mode3d .online{ background:var(--glass-dark); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px) }
+.stage.mode3d .panel,.stage.mode3d .chips,.stage.mode3d .ticker{ background:var(--glass); backdrop-filter:blur(14px) saturate(1.3); -webkit-backdrop-filter:blur(14px); border:1px solid var(--glass-line) }
+.stage.mode3d .chip{ background:rgba(255,255,255,.7) }
+.stage.mode3d .chip.done{ background:var(--c, var(--ok)) }
+.stage.mode3d .mini{ border-color:rgba(255,255,255,.9) }
+.stage.mode3d .emotes button,.stage.mode3d .emobtn{ background:var(--glass); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px) }
+
+/* Màn vào văn phòng: phối đồ */
+.card.join3d{ max-width:620px }
+.stage.wide .overlay.sheet .card.join3d{ max-width:640px }
+.cz{ display:grid; grid-template-columns:200px 1fr; gap:12px; margin:8px 0 4px; align-items:start }
+.cz-preview{ position:relative; height:250px; border-radius:var(--r-lg); background:radial-gradient(circle at 50% 35%,#ffffff,#dfeaf6 70%); border:1px solid var(--n200); overflow:hidden }
+.cz-preview canvas{ width:100%; height:100%; display:block }
+.cz-no3d{ display:none; position:absolute; inset:0; place-items:center; text-align:center; font-size:12px; color:var(--n600); padding:12px }
+.cz-preview.no3d canvas{ display:none } .cz-preview.no3d .cz-no3d{ display:grid }
+.cz-opts{ display:grid; gap:7px }
+.cz-row{ display:grid; grid-template-columns:72px 1fr; gap:6px; align-items:center }
+.cz-row>span{ font-size:12px; font-weight:800; color:var(--n600) }
+.cz-row>div{ display:flex; flex-wrap:wrap; gap:5px }
+.cz .sw{ width:28px; height:28px; border-radius:50%; border:3px solid #fff; background:var(--c); box-shadow:0 0 0 1px var(--n200); cursor:pointer; padding:0 }
+.cz .sw.on{ box-shadow:0 0 0 3px var(--blue-500) }
+.cz .ch{ border:1.5px solid var(--n200); background:#fff; color:var(--ink); border-radius:99px; padding:5px 10px; font:700 12px var(--font); cursor:pointer; min-height:30px }
+.cz .ch.on{ background:var(--blue); border-color:var(--blue); color:#fff }
+.cz .ch.dice{ border-style:dashed }
+@media (max-width:520px){
+  .cz{ grid-template-columns:1fr } .cz-preview{ height:190px }
+  .cz-row{ grid-template-columns:62px 1fr } .cz .sw{ width:26px; height:26px }
+}
+
+/* Bảng mật thư (terminal) */
+.puzzle{ position:absolute; z-index:55; right:14px; bottom:96px; width:min(420px, calc(100% - 28px)); border-radius:18px; overflow:hidden;
+  background:rgba(8,14,24,.9); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); color:#e6f0ff;
+  box-shadow:0 0 0 1px rgba(95,179,255,.35),0 18px 48px rgba(0,0,0,.45); font-family:var(--font) }
+.stage:not(.wide) .puzzle{ left:8px; right:8px; width:auto; bottom:84px; max-height:58%; overflow:auto }
+.pz-head{ display:flex; align-items:center; gap:8px; padding:10px 12px 8px; background:linear-gradient(90deg,rgba(2,71,153,.65),rgba(5,130,212,.25)) }
+.pz-head b{ flex:1; font-size:14px; font-weight:900; letter-spacing:.02em }
+.pz-badge{ font-size:11px; font-weight:800; padding:3px 8px; border-radius:99px; background:#0E9F6E; color:#fff; white-space:nowrap }
+.pz-badge.t2{ background:#D47B0A } .pz-badge.t3{ background:#cc0e0e }
+.pz-min{ width:32px; height:32px; border-radius:8px; border:0; background:rgba(255,255,255,.12); color:#fff; font:900 18px var(--font); cursor:pointer }
+.pz-timer{ height:5px; background:rgba(255,255,255,.12) } .pz-timer i{ display:block; height:100%; background:linear-gradient(90deg,#34d399,#5fb3ff); transform-origin:left; transition:transform .2s linear }
+.puzzle.urgent .pz-timer i{ background:#ff6b64 }
+.pz-body{ padding:12px }
+.puzzle.min .pz-body{ display:none }
+.pz-q{ margin:0 0 10px; white-space:pre-wrap; word-break:break-word; font:500 15px/1.5 'JetBrains Mono', monospace; color:#a8f0c6;
+  background:rgba(0,0,0,.35); border:1px dashed rgba(52,211,153,.4); border-radius:10px; padding:10px 12px }
+.pz-clues{ list-style:none; margin:0 0 10px; padding:0; display:grid; gap:6px }
+.pz-clues li{ background:rgba(255,207,58,.12); border:1px solid rgba(255,207,58,.35); border-radius:10px; padding:7px 10px; font-size:12.5px; display:grid; gap:2px }
+.pz-clues li span{ font-weight:800; color:#ffe27a } .pz-clues li em{ color:#c7d3e3; font-style:normal }
+.pz-clues li.ok{ background:rgba(52,211,153,.14); border-color:rgba(52,211,153,.45) } .pz-clues li.ok span{ color:#34d399 } .pz-clues li.ok b{ color:#fff; font-weight:700 }
+.pz-hints p{ margin:0 0 6px; font-size:12.5px; color:#ffe9a6 }
+.pz-form{ display:flex; gap:8px }
+.pz-in{ flex:1; min-width:0; min-height:46px; border-radius:10px; border:2px solid rgba(95,179,255,.5); background:rgba(0,0,0,.4); color:#fff;
+  font:700 17px 'JetBrains Mono', monospace; padding:0 12px; text-transform:uppercase; letter-spacing:.06em }
+.pz-in:focus{ outline:none; border-color:#5fb3ff; box-shadow:0 0 0 3px rgba(95,179,255,.25) }
+.pz-go{ min-height:46px; border:0; border-radius:10px; padding:0 16px; background:#0582D4; color:#fff; font:800 14px var(--font); cursor:pointer }
+.pz-go:disabled{ opacity:.5 }
+.pz-meta{ margin:8px 0 0; font-size:11.5px; color:#9fb3c8 }
+.puzzle.shake{ animation:shake .4s }
+.pz-win{ text-align:center } .pz-ok{ font-size:17px; font-weight:900; color:#34d399; margin:4px 0 10px } .pz-fail{ font-size:17px; font-weight:900; color:#ff8a84; margin:4px 0 8px }
+.pz-code{ display:flex; gap:8px; justify-content:center; margin-bottom:6px }
+.pz-code code{ font:700 18px 'JetBrains Mono', monospace; background:#fff; color:var(--blue); border-radius:10px; padding:10px 14px; user-select:all; -webkit-user-select:all }
+.pz-cond{ font-size:12px; color:#c7d3e3; margin:0 0 10px }
+.puzzle.win{ box-shadow:0 0 0 2px #34d399,0 18px 48px rgba(0,0,0,.45) }
+@media (prefers-reduced-motion:reduce){ .puzzle.shake{ animation:none } }

@@ -1,0 +1,7 @@
+tier,type,question,answers,hint1,hint2,clue_spot1,clue1,clue_spot2,clue2,clue_spot3,clue3
+1,fill,"Điền vào chỗ trống: ""Chứng chỉ ___ giúp website hiện ổ khóa và chạy https.""",SSL,Viết tắt 3 chữ cái,Bắt đầu bằng chữ S,,,,,,
+1,anagram,"Sắp xếp lại các chữ cái thành tên dịch vụ iNET:  N I T E E M N",TEN MIEN|TENMIEN|DOMAIN,Địa chỉ của website,Có 7 chữ cái,,,,,,
+2,caesar,"Mỗi chữ cái đã bị dịch tiến 1 bước (A→B). Giải mã:  IPTUJOH",HOSTING,Lùi mỗi chữ 1 bước,Bắt đầu bằng HO,,,,,,
+2,a1z26,"A=1, B=2, … Z=26. Giải mã:  5-13-1-9-12",EMAIL,Thư điện tử doanh nghiệp,Bắt đầu bằng E,,,,,,
+3,clues,"Ghép [Mảnh 1][Mảnh 2] (viết liền, không dấu chấm). Ví dụ: 80COM",443IDVN,Mảnh 2 có dạng .__.vn,Mảnh 1 là 3 chữ số bắt đầu bằng 4,server,Mảnh 1: số cổng mặc định của HTTPS,pantry,Mảnh 2: đuôi tên miền dành cho cá nhân của Việt Nam,,
+3,clues,"Ghép [Mảnh 1][Mảnh 2][Mảnh 3] (viết liền).",IDVNBIZVN2007,Mảnh 3 là năm thành lập iNET,Bắt đầu bằng IDVN,reception,Mảnh 1: đuôi tên miền cá nhân (bỏ dấu chấm),lounge,Mảnh 2: đuôi tên miền hộ kinh doanh (bỏ dấu chấm),meeting,Mảnh 3: năm iNET thành lập

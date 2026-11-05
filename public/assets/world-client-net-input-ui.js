@@ -1,12 +1,14 @@
 /* =============================================================================
- * Đại Sảnh Nét Online — điều khiển phía người chơi
- * - Vào sảnh: biệt danh + chọn 1 trong 6 bé Nét
+ * iNET Tech Office — điều khiển phía người chơi (3D, tự chuyển 2D nếu máy không hỗ trợ WebGL)
+ * - Vào văn phòng: biệt danh + phối đồ nhân vật người 3D
+ * - Gom đủ mảnh / giành Siêu Deal → giải MẬT THƯ mới nhận mã (máy chủ chấm)
  * - Đi lại: chạm/click sàn để đi tới, kéo để dùng cần điều khiển, phím mũi tên/WASD
  * - Gửi vị trí ~10 lần/giây; máy chủ kiểm tra tốc độ, quyết định ai nhặt được hộp
  * - Chế độ LIVE (WebSocket) hoặc LUYỆN TAY (?mode=practice, máy chủ giả trong trình duyệt)
  * ============================================================================= */
-(() => {
+(async () => {
 'use strict';
+const SCRIPT_BASE = document.currentScript ? document.currentScript.src : location.href;
 const WR = window.WorldRules, SP = window.WorldSprites;
 const PRACTICE = new URLSearchParams(location.search).get('mode') === 'practice';
 const EMOTES = ['Săn deal thôi!', 'Chờ Siêu Deal!', 'Hết mã rồi 😭', 'Được mã rồi 🎉', 'Ai đi Hosting?', 'Cảm ơn iNET!'];
@@ -59,16 +61,27 @@ const sfx = {
 
 /* ---------- Trạng thái ---------- */
 const stage = $('#stage'), canvas = $('#world'), mini = $('#mini'), fxEl = $('#fx'), chipsEl = $('#chips');
-const R = WorldRenderer.create(canvas);
+// Ưu tiên 3D (Three.js); máy không có WebGL hoặc lỗi → bản 2D. Thêm ?2d để ép bản 2D.
+const FORCE_2D = new URLSearchParams(location.search).has('2d');
+let R = null, avatarMod = null;
+function webglOK(){ try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch(e){ return false; } }
+if (!FORCE_2D && webglOK()){
+  try {
+    avatarMod = await import(new URL('office3d-human-avatar-factory.js', SCRIPT_BASE).href);
+    R = (await import(new URL('office3d-office-scene-renderer.js', SCRIPT_BASE).href)).create(canvas);
+  } catch(e){ console.warn('[3D] không chạy được, chuyển sang 2D:', e); R = null; avatarMod = null; }
+}
+if (!R) R = WorldRenderer.create(canvas);
+stage.classList.toggle('mode3d', !!R.is3D);
 const S = {                                     // trạng thái để vẽ
   me: { x: WR.SPAWN.x, y: WR.SPAWN.y - 40, avatar:'wave', nick:'', facing:1, moving:false, stunUntil:0, shieldUntil:0, emote:'', emoteUntil:0 },
-  others: new Map(), drops: new Map(), bugs: new Map(), stock:{}, names:{}, live:false, screenText:'--:--', screenSub:'', target:null
+  others: new Map(), drops: new Map(), bugs: new Map(), stock:{}, names:{}, live:false, screenText:'--:--', screenSub:'', target:null, puzzle:null
 };
 const G = { score:0, pieces:{}, claimed:new Set(), codes:[], top:[] };   // trạng thái phiên của em
 let services = PRACTICE ? PRACTICE_SERVICES : [], need = 5, myRid = 0;
 let link = null, joined = false, retry = 0, stopReconnect = false, siteKey = '', tsWidget = null;
 let offset = 0, phase = { phase:'idle', session:null, next:null }, sessionId = null;
-let me = { pid: store.get('netLive.pid'), nick: store.get('netLive.nick') || '', avatar: store.get('netLive.avatar') || 'wave' };
+let me = { pid: store.get('netLive.pid'), nick: store.get('netLive.nick') || '', avatar: store.get('netLive.look') || CharacterCustomizer.str(CharacterCustomizer.random()) };
 if (!me.pid || !/^[A-Za-z0-9_-]{8,40}$/.test(me.pid)){
   me.pid = 'p' + Array.from(crypto.getRandomValues(new Uint8Array(16)), b => (b % 36).toString(36)).join('');
   store.set('netLive.pid', me.pid);
@@ -80,12 +93,15 @@ function setServices(list){
 }
 
 /* ---------- Khởi động ---------- */
-buildAvatarPicker();
+const customizer = CharacterCustomizer.create({ root: $('#custom'), previewCanvas: $('#preview'), avatarMod, initial: me.avatar,
+  onChange: v => { me.avatar = v; S.me.avatar = v; store.set('netLive.look', v); } });
+const pz = PuzzlePanel.create({ root: $('#puzzle'), onSubmit: (id, a) => send({ t:'ans', id, a }),
+  svcName: svc => svc === 'super' ? 'Siêu Deal' : (S.names[svc] || svc) });
 $('#nick').value = me.nick;
 if (PRACTICE){
   stage.classList.add('practice');
-  $('#tJoin').innerHTML = 'Luyện tay <em>Đại Sảnh Nét</em>';
-  $('#joinSub').innerHTML = 'Đi lại trong sảnh, tranh hộp quà với 8 bot cho quen tay. Bản luyện tay <b>không phát mã</b>.';
+  $('#tJoin').innerHTML = 'Luyện tay <em>iNET Tech Office</em>';
+  $('#joinSub').innerHTML = 'Đi lại trong văn phòng, tranh hộp quà với 8 đồng nghiệp ảo và thử giải mật thư. Bản luyện tay <b>không phát mã</b>.';
   $('#nextInfo').innerHTML = '<a href="./">← Về sảnh live săn mã thật</a>';
   $('#btnJoin').textContent = 'Bắt đầu luyện';
   $('#practiceLink').hidden = true;
@@ -102,19 +118,6 @@ if (PRACTICE){
 }
 setInterval(clockTick, 250);
 requestAnimationFrame(frame);
-
-/* ---------- Chọn nhân vật ---------- */
-function buildAvatarPicker(){
-  const box = $('#avatars');
-  box.innerHTML = SP.AVATARS.map(a => `<button type="button" class="av${a === me.avatar ? ' on' : ''}" data-av="${a}" aria-pressed="${a === me.avatar}">
-    <img src="assets/mascot/net-${a}.webp" alt="" width="64" height="80"><span>${esc(SP.AVATAR_NAMES[a])}</span></button>`).join('');
-  box.addEventListener('click', e => {
-    const b = e.target.closest('.av'); if (!b) return;
-    me.avatar = b.dataset.av; store.set('netLive.avatar', me.avatar);
-    box.querySelectorAll('.av').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); });
-    sfx.pop();
-  });
-}
 
 /* ---------- Turnstile ---------- */
 let tsResolve = null, tsToken = '';
@@ -193,7 +196,30 @@ function handle(m){
     case 'clear': S.drops.clear(); S.bugs.clear(); return;
     case 'pick': return onPick(m);
     case 'stun': S.me.stunUntil = Date.now() + m.ms; S.target = null; G.streak = 0; fxAt('Dính DDoS! Đơ 3 giây', S.me, 'bad'); sfx.bug(); shake(); return;
-    case 'blocked': G.score = m.score; updateScore(); fxAt('Khiên chặn DDoS! +5', S.me, 'info'); sfx.shield(); return;
+    case 'blocked':
+      if (m.reason){ blockedMsg(m.reason, m.svc); return; }                     // mật thư kế tiếp không mở được
+      G.score = m.score; updateScore(); fxAt('Khiên chặn DDoS! +5', S.me, 'info'); sfx.shield(); return;
+    case 'puzzle':
+      S.puzzle = { id:m.id, clues:(m.clues || []).map(c => ({ ...c })) };
+      pz.open(m); sfx.warn(); track('puzzle_open', { svc:m.svc, tier:m.tier });
+      if (m.clues && m.clues.length && !m.clues.every(c => c.text)) toast('Mật thư cấp 3: đi tìm manh mối trong văn phòng!');
+      return;
+    case 'clue':
+      if (S.puzzle && S.puzzle.id === m.id){ const c = S.puzzle.clues.find(x => x.spot === m.spot); if (c) c.text = m.text; }
+      pz.clue(m); sfx.pop(); fxAt('Đọc được manh mối!', S.me, 'info'); return;
+    case 'ans_r':
+      if (pz.result(m)){
+        S.puzzle = null; S.me.cheerUntil = Date.now() + 1600;
+        if (typeof m.score === 'number'){ G.score = m.score; updateScore(); }
+        if (m.code) gotCode(m.code); else { toast('Giải đúng mật thư!'); sfx.code(); }
+        track('puzzle_solved', { ms:m.ms });
+      } else if (!m.slow){ sfx.bug(); if (m.end === 'expired'){ S.puzzle = null; pz.close(); toast('Mã giữ chỗ đã hết hạn', 'warn'); } }
+      return;
+    case 'puzzle_end':
+      S.puzzle = null; pz.end(m);
+      if (m.pieces){ G.pieces = m.pieces; renderChips(); }
+      toast(m.reason === 'timeout' ? 'Hết giờ giữ mã, mã trả lại kho' : 'Hết lượt thử, mã trả lại kho', 'warn');
+      track('puzzle_' + m.reason); return;
     case 'emo': return onEmote(m);
     case 'stock': S.stock = m.s; return renderChips();
     case 'feed': return (m.items || []).forEach(pushTicker);
@@ -208,6 +234,7 @@ function onWelcome(m){
   if (m.services) setServices(m.services);
   need = m.need || need; myRid = m.you.rid;
   S.me.x = m.you.x; S.me.y = m.you.y; S.me.avatar = m.you.avatar; S.me.nick = m.you.nick; S.target = null;
+  S.puzzle = null; pz.close();
   S.others.clear(); (m.roster || []).forEach(addOther);
   S.drops.clear(); (m.drops || []).forEach(d => onDrop(d, true));
   G.score = m.state.score; G.pieces = m.state.pieces || {}; G.codes = m.state.codes || []; G.claimed = new Set(m.state.claimed || []);
@@ -247,14 +274,14 @@ function onPick(m){
   if (m.kind === 'shield'){ S.me.shieldUntil = Date.now() + m.ms; fxAt('Khiên OneShield 5 giây!', S.me, 'info'); sfx.shield(); }
   else if (m.kind === 'super'){ fxAt('+50 Siêu Deal!', S.me); sfx.super(); }
   else { if (!m.done && m.pieces) G.pieces[m.svc] = m.pieces; fxAt(m.done ? '+10 điểm' : `+1 mảnh ${name} (${Math.min(m.pieces, need)}/${need})`, S.me); sfx.gift(); }
-  if (m.code) gotCode(m.code);
-  else if (m.blocked) blockedMsg(m.blocked, m.svc);
-  else if (m.practiceDone) toast(m.practiceDone === 'super' ? 'Giành được Siêu Deal! (luyện tay)' : `Đủ bộ ${name}! Ở phiên live là nhận mã rồi`);
+  if (m.blocked) blockedMsg(m.blocked, m.svc);
+  else if (m.queued) toast(`Đủ mảnh ${name}! Giải xong mật thư đang mở sẽ tới lượt ${name}`);
   updateScore(); renderChips();
 }
 function blockedMsg(reason, svc){
   const name = svc === 'super' ? 'Siêu Deal' : (S.names[svc] || '');
-  const txt = { stockout:`Kho ${name} vừa hết mã`, limit_session:'Em đã nhận đủ mã của phiên này', limit_day:`Hôm nay em đã nhận mã ${name} rồi`, limit:`Hôm nay em đã nhận ${name} rồi` }[reason];
+  const txt = { stockout:`Kho ${name} vừa hết mã`, limit_session:'Em đã nhận đủ mã của phiên này', limit_day:`Hôm nay em đã nhận mã ${name} rồi`,
+                limit:`Hôm nay em đã nhận ${name} rồi`, busy:'Giải xong mật thư đang mở rồi mới nhận được Siêu Deal' }[reason];
   if (txt) toast(txt, 'warn');
   if (reason !== 'stockout' && svc !== 'super') G.claimed.add(svc);
 }
@@ -423,6 +450,8 @@ function frame(t){
   requestAnimationFrame(frame);
 }
 addEventListener('resize', () => { R.resize(); layoutClass(); });
+// Lăn chuột để zoom (bản 3D)
+canvas.addEventListener('wheel', e => { if (R.zoomBy){ e.preventDefault(); R.zoomBy(e.deltaY > 0 ? 1.08 : 0.92); } }, { passive:false });
 function layoutClass(){ stage.classList.toggle('wide', stage.clientWidth / Math.max(1, stage.clientHeight) >= 1.05); }
 layoutClass();
 
@@ -506,7 +535,7 @@ function onResult(m){
 $('#rClose').addEventListener('click', () => { $('#screenResult').hidden = true; if (PRACTICE) send({ t:'restart' }); });
 
 function fxAt(text, w, cls = ''){
-  const p = R.toScreen(w.x, w.y - 150);
+  const p = R.is3D ? R.toScreen(w.x, w.y, 200) : R.toScreen(w.x, w.y - 150);
   const d = document.createElement('div'); d.className = 'pop ' + cls; d.textContent = text;
   d.style.left = p.x + 'px'; d.style.top = p.y + 'px';
   fxEl.appendChild(d); setTimeout(() => d.remove(), 1000);
@@ -551,5 +580,5 @@ muteBtn.addEventListener('click', () => { muted = !muted; store.set('netDeal.mut
 paintMute();
 
 // Cho trang thử nghiệm/kiểm tra
-window.__world = { S, G, send, get phase(){ return phase; } };
+window.__world = { S, G, R, send, get phase(){ return phase; } };
 })();

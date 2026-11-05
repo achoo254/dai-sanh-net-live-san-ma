@@ -3,12 +3,15 @@
  * - Theo dõi pha (sảnh chờ → live → kết thúc) theo lịch, báo cho mọi người
  * - Chia người chơi vào các sảnh (tối đa cfg.roomCap/sảnh, mỗi người 1 nhân vật đi lại), mọi sảnh dùng CHUNG kho mã
  * - Giữ trạng thái người chơi (mảnh, điểm, mã) để rớt mạng vào lại không mất
+ * - Mở hộp → giải MẬT THƯ: giữ chỗ mã 90s, chấm đáp án trên máy chủ, sai hết lượt/hết giờ thì trả mã về kho
  * - Cấp mã theo giới hạn: tối đa N mã/phiên, 1 mã/dịch vụ/ngày, 1 Siêu Deal/ngày
  * - Bảng xếp hạng, tồn kho, dòng tin, số người online
  * ============================================================================= */
 'use strict';
 const { Room } = require('./live-room-world-movement-drops-bugs');
 const { phaseAt } = require('./session-schedule-phase-calculator');
+const WR = require('../public/assets/world-map-rules-shared.js');
+const PuzzleKit = require('../public/assets/puzzle-cipher-generator-shared.js');
 
 const vnDay = ts => new Date(ts + 7 * 3600e3).toISOString().slice(0, 10);
 
@@ -21,7 +24,9 @@ class Player {
   resetSession(sessionId){
     this.session = sessionId;
     this.score = 0; this.streak = 0; this.pieces = {};
-    this.claimed = new Set(); this.codes = [];
+    this.claimed = new Set(); this.codes = []; this.pendingUnlock = new Set();
+    if (this.puzzle) clearTimeout(this.puzzle.timer);
+    this.puzzle = null;
     this.stunUntil = 0; this.shieldUntil = 0; this.dirty = false;
   }
   sendRaw(s){
@@ -34,7 +39,11 @@ class Player {
 
 class Hub {
   constructor(cfg, store){
-    this.cfg = cfg; this.store = store;
+    this.cfg = cfg; this.store = store; this.WR = WR; this.kit = PuzzleKit;
+    // CHỈ dùng khi load test ở chế độ chạy thử: gửi kèm đáp án để bot giải được (không bao giờ bật khi chạy thật)
+    this.revealAnswers = cfg.demoLoop && process.env.LOADTEST_REVEAL_ANSWERS === '1';
+    if (this.revealAnswers) console.warn('[CẢNH BÁO] LOADTEST_REVEAL_ANSWERS=1: đáp án mật thư được gửi kèm (chỉ để load test)!');
+    store.seedSamplePuzzles(PuzzleKit);
     this.players = new Map();     // pid → Player (giữ cả người tạm rớt mạng trong phiên)
     this.rooms = [];
     this.roomSeq = 0;
@@ -131,6 +140,7 @@ class Hub {
     });
     p.reply(this.phaseMsg());
     if (this.lastTop) p.sendRaw(this.lastTop);
+    if (p.puzzle) this.sendPuzzle(p);            // vào lại giữa lúc giải mật thư → mở lại đúng đề, đúng giờ còn lại
     return p;
   }
   leave(p, ws){
@@ -153,7 +163,7 @@ class Hub {
     return [...this.players.values()].filter(p => p.session === sid);
   }
 
-  /* ---------- Điểm, mảnh, cấp mã ---------- */
+  /* ---------- Điểm, mảnh ---------- */
   addScore(p, pts, combo = true){
     p.score += pts * (combo && p.streak >= this.cfg.comboAt ? 2 : 1);
     p.dirty = true;
@@ -162,13 +172,12 @@ class Hub {
     p.streak++;
     this.addScore(p, this.cfg.points.gift);
     const need = this.cfg.piecesToUnlock;
-    if (p.claimed.has(svc)) return { score:p.score, streak:p.streak, pieces:p.pieces[svc] || need, done:true };
-    p.pieces[svc] = (p.pieces[svc] || 0) + 1;
+    if (p.claimed.has(svc)) return { score:p.score, streak:p.streak, pieces:need, done:true };
+    p.pieces[svc] = Math.min(need, (p.pieces[svc] || 0) + 1);
     const out = { score:p.score, streak:p.streak, pieces:p.pieces[svc] };
     if (p.pieces[svc] >= need){
-      const r = this.tryIssue(p, svc);
-      if (r.code){ out.code = r.code; p.claimed.add(svc); }
-      else { out.blocked = r.reason; p.pieces[svc] = need; if (r.reason !== 'stockout') p.claimed.add(svc); }
+      if (p.puzzle){ p.pendingUnlock.add(svc); out.queued = true; }      // đang giải đề khác → mở sau
+      else { const r = this.openPuzzle(p, svc); if (r.blocked) out.blocked = r.blocked; else out.puzzle = true; }
     }
     return out;
   }
@@ -176,34 +185,115 @@ class Hub {
     p.streak++;
     this.addScore(p, this.cfg.points.super, false);
     const out = { score:p.score, streak:p.streak };
-    const day = vnDay(this.state.session.start);
-    if (this.store.countDayService(p.pid, 'super', day) >= this.cfg.maxSuperPerDay){ out.blocked = 'limit'; return out; }
-    const code = this.issue(p, 'super', day);
-    if (code) out.code = code; else out.blocked = 'stockout';
+    if (p.puzzle){ out.blocked = 'busy'; return out; }
+    const r = this.openPuzzle(p, 'super');
+    if (r.blocked) out.blocked = r.blocked; else out.puzzle = true;
     return out;
   }
-  tryIssue(p, svc){
+
+  /* ---------- Mật thư: giữ mã → mở đề → chấm đáp án ---------- */
+  limitReason(p, svc){
     const day = vnDay(this.state.session.start);
-    const inSession = p.codes.filter(c => c.service !== 'super').length;
-    if (inSession >= this.cfg.maxCodesPerSession) return { reason:'limit_session' };
-    if (this.stock[svc] && this.stock[svc].free <= 0) return { reason:'stockout' };   // khỏi hỏi DB khi đã biết hết kho
-    if (this.store.countDayService(p.pid, svc, day) >= this.cfg.maxCodesPerServicePerDay) return { reason:'limit_day' };
-    const code = this.issue(p, svc, day);
-    return code ? { code } : { reason:'stockout' };
+    if (svc === 'super') return this.store.countDayService(p.pid, 'super', day) >= this.cfg.maxSuperPerDay ? 'limit' : null;
+    if (p.codes.filter(c => c.service !== 'super').length >= this.cfg.maxCodesPerSession) return 'limit_session';
+    if (this.store.countDayService(p.pid, svc, day) >= this.cfg.maxCodesPerServicePerDay) return 'limit_day';
+    return null;
   }
-  issue(p, svc, day){
-    const code = this.store.issue(svc, { pid:p.pid, nick:p.nick, session:this.sessionId(), day });
-    if (!code) { this.setStockFree(svc, 0); return null; }
-    p.codes.push(code);
-    const st = this.stock[svc]; if (st) st.free = Math.max(0, st.free - 1);
-    this.stockDirty = true;
-    this.feedQ.push(`${p.nick} vừa nhận mã ${this.svcName[svc]}!`);
-    return code;
+  pickPuzzle(tier){
+    // Cấp 3 luôn lấy từ ngân hàng (cần manh mối); cấp 1–2 trộn đề MKT (60%) với đề tự sinh (mỗi người một đề)
+    const fromBank = tier >= 3 || (this.store.bankCount(tier) > 0 && Math.random() < 0.6);
+    if (fromBank){ const q = this.store.randomPuzzle(tier); if (q) return q; }
+    const g = this.kit.generate(tier);
+    return Object.assign({ key:'gen:' + g.type }, g);
+  }
+  openPuzzle(p, svc){
+    const reason = this.limitReason(p, svc);
+    if (reason){ if (reason !== 'limit' && svc !== 'super') p.claimed.add(svc); return { blocked: reason }; }
+    if (this.stock[svc] && this.stock[svc].free <= 0) return { blocked:'stockout' };
+    const holdMs = this.cfg.puzzleHoldMs;
+    const code = this.store.reserve(svc, { pid:p.pid, session:this.sessionId(), holdMs });
+    if (!code){ this.setStockFree(svc, 0); return { blocked:'stockout' }; }
+    this.bumpStock(svc, -1);
+    const tier = this.cfg.puzzleTiers[svc] || 1;
+    const q = this.pickPuzzle(tier);
+    const now = Date.now();
+    p.puzzle = { id: Math.random().toString(36).slice(2, 10), svc, tier, key:q.key, type:q.type, question:q.question,
+                 answers:q.answers, hints:[q.hint1, q.hint2].filter(Boolean), clues:q.clues || [], found:new Set(),
+                 attempts:0, opened:now, until: now + holdMs, code };
+    p.puzzle.timer = setTimeout(() => this.endPuzzle(p, 'timeout'), holdMs);
+    this.store.statOpen(q.key);
+    this.sendPuzzle(p);
+    return {};
+  }
+  sendPuzzle(p){
+    const z = p.puzzle; if (!z) return;
+    const WR = this.WR;
+    p.reply({ t:'puzzle', id:z.id, svc:z.svc, tier:z.tier, type:z.type, question:z.question,
+      ms: Math.max(0, z.until - Date.now()), attempts: this.cfg.puzzleAttempts - z.attempts,
+      hints: z.hints.slice(0, z.attempts),
+      clues: z.clues.map(c => ({ spot:c.spot, name:(WR.CLUE_SPOTS[c.spot] || {}).name || c.spot, text: z.found.has(c.spot) ? c.text : null })),
+      ...(this.revealAnswers ? { _answer: z.answers[0] } : {}) });
+  }
+  /** Đứng gần điểm manh mối → máy chủ gửi nội dung manh mối (gọi mỗi khi người chơi di chuyển). */
+  checkClues(p){
+    const z = p.puzzle; if (!z || !z.clues.length) return;
+    for (const c of z.clues){
+      if (z.found.has(c.spot)) continue;
+      const spot = this.WR.CLUE_SPOTS[c.spot];
+      if (spot && this.WR.dist2(p, spot) <= this.WR.CLUE_R ** 2){ z.found.add(c.spot); p.reply({ t:'clue', id:z.id, spot:c.spot, text:c.text }); }
+    }
+  }
+  answer(p, id, text){
+    const z = p.puzzle, now = Date.now();
+    if (!z || z.id !== id || typeof text !== 'string') return;
+    if (now - (p.lastAns || 0) < 1200) return p.reply({ t:'ans_r', id, ok:false, slow:true });   // chống dò đáp án bằng máy
+    p.lastAns = now;
+    if (this.kit.check(z.answers, text.slice(0, 80))){
+      const day = vnDay(this.state.session ? this.state.session.start : now);
+      const code = this.store.confirm(z.code, { pid:p.pid, nick:p.nick, session:this.sessionId(), day });
+      const ms = now - z.opened;
+      this.clearPuzzle(p);
+      if (!code){ p.reply({ t:'ans_r', id, ok:false, end:'expired' }); return this.afterPuzzle(p); }
+      this.store.statResult(z.key, true, ms);
+      p.codes.push(code); if (z.svc !== 'super') p.claimed.add(z.svc);
+      const bonus = this.cfg.points.puzzle + Math.max(0, Math.round(this.cfg.points.puzzleSpeed * (1 - ms / this.cfg.puzzleHoldMs)));
+      this.addScore(p, bonus, false);
+      this.feedQ.push(`${p.nick} vừa giải mật thư, nhận mã ${this.svcName[z.svc]}!`);
+      p.reply({ t:'ans_r', id, ok:true, code, bonus, score:p.score, ms });
+      return this.afterPuzzle(p);
+    }
+    z.attempts++;
+    if (z.attempts >= this.cfg.puzzleAttempts) return this.endPuzzle(p, 'fail');
+    p.reply({ t:'ans_r', id, ok:false, left: this.cfg.puzzleAttempts - z.attempts, hint: z.hints[z.attempts - 1] || null });
+  }
+  /** Hết lượt / hết giờ: trả mã về kho, dịch vụ đó phải gom lại mảnh. */
+  endPuzzle(p, reason){
+    const z = p.puzzle; if (!z) return;
+    this.clearPuzzle(p);
+    this.store.release(z.code, p.pid);
+    this.bumpStock(z.svc, +1);
+    this.store.statResult(z.key, false, 0);
+    if (z.svc !== 'super') p.pieces[z.svc] = 0;
+    p.dirty = true;
+    p.reply({ t:'puzzle_end', id:z.id, reason, svc:z.svc, pieces:p.pieces });
+    this.afterPuzzle(p);
+  }
+  clearPuzzle(p){ if (p.puzzle){ clearTimeout(p.puzzle.timer); p.puzzle = null; } }
+  afterPuzzle(p){
+    for (const svc of p.pendingUnlock){
+      p.pendingUnlock.delete(svc);
+      if (!p.claimed.has(svc) && (p.pieces[svc] || 0) >= this.cfg.piecesToUnlock && this.state.session){
+        const r = this.openPuzzle(p, svc);
+        if (r.blocked) p.reply({ t:'blocked', svc, reason:r.blocked });
+        else break;
+      }
+    }
   }
 
   /* ---------- Tồn kho ---------- */
   refreshStock(sessionId){ this.stock = this.store.stock(sessionId || this.sessionId()); this.stockDirty = true; }
   setStockFree(svc, n){ if (this.stock[svc]) { this.stock[svc].free = n; this.stockDirty = true; } }
+  bumpStock(svc, d){ const st = this.stock[svc]; if (st){ st.free = Math.max(0, st.free + d); this.stockDirty = true; } }
   stockOf(svc){ return this.stock[svc]; }
   stockMsg(){
     const s = {};

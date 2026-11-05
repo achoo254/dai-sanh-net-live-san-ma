@@ -1,5 +1,5 @@
 /* =============================================================================
- * Đại Sảnh Nét Online — "máy chủ giả" chạy ngay trong trình duyệt cho bản LUYỆN TAY
+ * iNET Tech Office — "máy chủ giả" chạy ngay trong trình duyệt cho bản LUYỆN TAY (có mật thư, không phát mã)
  * Phát đúng các tin nhắn như máy chủ thật (welcome, phase, drop, pick, snap, stun...) nên
  * giao diện dùng chung 100%. KHÔNG phát mã giảm giá. Có 8 bot đi tranh hộp cho vui.
  * Dùng: const hub = PracticeHub.create(onMessage); hub.send({ t:'hello', ... })
@@ -9,18 +9,20 @@ window.PracticeHub = (() => {
   const WR = window.WorldRules;
   const SERVICES = ['domain', 'hosting', 'vps', 'ssl', 'email'];
   const BOT_NAMES = ['Lan', 'Minh', 'Tuấn', 'Hà', 'Phong', 'Vy', 'Khoa', 'Trang'];
-  const AVATARS = ['wave', 'shield', 'thumb', 'idea', 'book', 'support'];
-  const LOBBY_MS = 6000, LIVE_MS = 90000, NEED = 5, SLOTS = 3, TTL = 7000;
+  const TIERS = { domain:1, email:1, hosting:2, ssl:2, vps:3, super:3 }, HOLD = 90000, ATTEMPTS = 3;
+  const rnd = n => Math.floor(Math.random() * n);
+  const randomLook = () => `g:${Math.random() < .5 ? 'm' : 'f'}|s:${rnd(5)}|h:${rnd(5)}|hc:${rnd(5)}|t:${['polo', 'hoodie', 'shirt', 'tee'][rnd(4)]}|tc:${rnd(5)}|a:${['none', 'glasses', 'headset', 'cap'][rnd(4)]}`;
+  const LOBBY_MS = 6000, LIVE_MS = 180000, NEED = 5, SLOTS = 3, TTL = 7000;
 
   function create(emit){
     let me = null, bots = [], drops = new Map(), bugs = [], seq = 0, timers = [], loop = null;
-    let session = null, phase = 'idle', pieces = {}, done = new Set(), score = 0;
+    let session = null, phase = 'idle', pieces = {}, done = new Set(), score = 0, puzzle = null;
     const out = m => setTimeout(() => emit(m), 0);
     const later = (ms, fn) => timers.push(setTimeout(fn, ms));
 
     function start(){
       timers.forEach(clearTimeout); timers = []; clearInterval(loop);
-      drops.clear(); pieces = {}; done = new Set(); score = 0;
+      drops.clear(); pieces = {}; done = new Set(); score = 0; if (puzzle) clearTimeout(puzzle.timer); puzzle = null;
       const now = Date.now();
       session = { id:'practice-' + now, title:'Luyện tay', lobbyAt: now, start: now + LOBBY_MS, end: now + LOBBY_MS + LIVE_MS };
       setPhase('lobby');
@@ -60,12 +62,13 @@ window.PracticeHub = (() => {
       if (who === me){
         const res = { t:'pick', id:d.id, kind:d.kind, svc:d.svc };
         if (d.kind === 'shield'){ me.shieldUntil = now + 5000; res.ms = 5000; }
-        else if (d.kind === 'super'){ score += 50; res.practiceDone = 'super'; }
+        else if (d.kind === 'super'){ score += 50; if (puzzle) res.blocked = 'busy'; else openPuzzle('super'); }
         else {
           score += 10;
           if (!done.has(d.svc)){
-            pieces[d.svc] = (pieces[d.svc] || 0) + 1; res.pieces = pieces[d.svc];
-            if (pieces[d.svc] >= NEED){ done.add(d.svc); res.practiceDone = d.svc; }
+            pieces[d.svc] = Math.min(NEED, (pieces[d.svc] || 0) + 1); res.pieces = pieces[d.svc];
+            if (pieces[d.svc] >= NEED && !puzzle) openPuzzle(d.svc);
+            else if (pieces[d.svc] >= NEED) res.queued = true;
           } else res.done = true;
         }
         res.score = score;
@@ -75,8 +78,45 @@ window.PracticeHub = (() => {
       if (left <= 0){ drops.delete(d.id); out({ t:'gone', id:d.id, r:'full' }); }
       else out({ t:'slots', id:d.id, left });
     }
+    /* Mật thư luyện tay: đề tự sinh (cùng bộ sinh với máy chủ), giữ 90 giây, 3 lần thử, không phát mã */
+    function openPuzzle(svc){
+      const tier = TIERS[svc] || 1, q = window.PuzzleKit.generate(tier), now = Date.now();
+      puzzle = { id:'L' + now, svc, tier, q, found:new Set(), attempts:0, opened:now, until: now + HOLD,
+                 hints:[q.hint1, q.hint2].filter(Boolean) };
+      puzzle.timer = setTimeout(() => endPuzzle('timeout'), HOLD);
+      out({ t:'puzzle', id:puzzle.id, svc, tier, type:q.type, question:q.question, ms:HOLD, attempts:ATTEMPTS, hints:[],
+            clues:(q.clues || []).map(c => ({ spot:c.spot, name:(WR.CLUE_SPOTS[c.spot] || {}).name || c.spot, text:null })) });
+    }
+    function endPuzzle(reason){
+      if (!puzzle) return;
+      clearTimeout(puzzle.timer);
+      if (puzzle.svc !== 'super') pieces[puzzle.svc] = 0;
+      out({ t:'puzzle_end', id:puzzle.id, reason, svc:puzzle.svc, pieces:{ ...pieces } });
+      puzzle = null; nextPuzzle();
+    }
+    function nextPuzzle(){
+      for (const svc in pieces) if (!done.has(svc) && pieces[svc] >= NEED){ openPuzzle(svc); return; }
+    }
+    function answer(id, text){
+      if (!puzzle || puzzle.id !== id) return;
+      if (window.PuzzleKit.check(puzzle.q.answers, text)){
+        clearTimeout(puzzle.timer);
+        const ms = Date.now() - puzzle.opened, bonus = 30 + Math.max(0, Math.round(50 * (1 - ms / HOLD)));
+        score += bonus; if (puzzle.svc !== 'super') done.add(puzzle.svc);
+        out({ t:'ans_r', id, ok:true, bonus, score, ms });
+        puzzle = null; nextPuzzle(); return;
+      }
+      puzzle.attempts++;
+      if (puzzle.attempts >= ATTEMPTS) return endPuzzle('fail');
+      out({ t:'ans_r', id, ok:false, left: ATTEMPTS - puzzle.attempts, hint: puzzle.hints[puzzle.attempts - 1] || null });
+    }
+
     function tick(){
       const now = Date.now(), dt = .066;
+      if (puzzle && me && puzzle.q.clues) for (const c of puzzle.q.clues){
+        const sp = WR.CLUE_SPOTS[c.spot];
+        if (sp && !puzzle.found.has(c.spot) && WR.dist2(me, sp) <= WR.CLUE_R ** 2){ puzzle.found.add(c.spot); out({ t:'clue', id:puzzle.id, spot:c.spot, text:c.text }); }
+      }
       if (phase === 'live'){
         bugs.forEach(b => WR.stepBug(b, dt));
         if (me && me.stunUntil < now && (me.safeUntil || 0) < now){
@@ -123,7 +163,7 @@ window.PracticeHub = (() => {
       if (m.t === 'hello'){
         const s = WR.spawnPoint();
         me = { id:'me', nick:m.nick, avatar:m.avatar, x:s.x, y:s.y, stunUntil:0, shieldUntil:0 };
-        bots = BOT_NAMES.map((n, i) => { const p = WR.randomWalkable(); return { id:'b' + i, rid:i + 2, nick:n + ' (bot)', avatar:AVATARS[i % 6], x:p.x, y:p.y, speed:170 + Math.random() * 60, score:0 }; });
+        bots = BOT_NAMES.map((n, i) => { const p = WR.randomWalkable(); return { id:'b' + i, rid:i + 2, nick:n + ' (bot)', avatar:randomLook(), x:p.x, y:p.y, speed:170 + Math.random() * 60, score:0 }; });
         out({ t:'welcome', practice:true, you:{ pid:'practice', nick:m.nick, avatar:m.avatar, rid:1, x:Math.round(s.x), y:Math.round(s.y) }, room:'Luyện tay',
               roster: bots.map(b => [b.rid, b.nick, b.avatar, Math.round(b.x), Math.round(b.y)]), drops:[], need:NEED, maxCodes:0,
               state:{ score:0, pieces:{}, codes:[], claimed:[] }, stock:{} });
@@ -135,6 +175,7 @@ window.PracticeHub = (() => {
       } else if (m.t === 'emo' && me){
         out({ t:'emo', id:1, i:m.i });
         if (Math.random() < .5){ const b = bots[Math.floor(Math.random() * bots.length)]; later(700, () => out({ t:'emo', id:b.rid, i: Math.floor(Math.random() * 6) })); }
+      } else if (m.t === 'ans'){ answer(m.id, m.a);
       } else if (m.t === 'restart'){ start(); }
     }
     return { send, close(){ timers.forEach(clearTimeout); clearInterval(loop); } };
