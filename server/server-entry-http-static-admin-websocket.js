@@ -46,7 +46,7 @@ function serverHealth(){
 }
 
 /* ---------- Tiện ích HTTP ---------- */
-const MIME = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.css':'text/css; charset=utf-8',
+const MIME = { '.html':'text/html; charset=utf-8', '.js':'application/javascript; charset=utf-8', '.css':'text/css; charset=utf-8',
   '.svg':'image/svg+xml', '.webp':'image/webp', '.png':'image/png', '.json':'application/json', '.ico':'image/x-icon', '.csv':'text/csv; charset=utf-8' };
 const SEC_HEADERS = { 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin', 'X-Frame-Options':'SAMEORIGIN' };
 
