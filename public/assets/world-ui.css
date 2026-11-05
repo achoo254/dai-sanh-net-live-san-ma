@@ -4,11 +4,11 @@
 .stage{background:#3b1f0c}
 
 /* Bản đồ nhỏ */
-.mini{position:absolute;z-index:31;right:10px;top:64px;width:200px;height:125px;border-radius:12px;border:3px solid #fff;
+.mini{position:absolute;z-index:31;right:10px;top:64px;width:216px;height:140px;border-radius:12px;border:3px solid #fff;
   box-shadow:0 6px 16px rgba(0,0,0,.35);background:#d9a35f;pointer-events:none;opacity:0;transition:opacity .3s}
 .stage.joined .mini{opacity:1}
 .stage.wide .panel{top:200px;max-height:calc(100% - 300px)}
-.stage:not(.wide) .mini{top:112px;width:128px;height:80px;border-width:2px}
+.stage:not(.wide) .mini{top:112px;width:132px;height:86px;border-width:2px}
 .stage:not(.wide) .hud{right:146px}
 
 .stage:not(.joined) .panel,.stage:not(.joined) .panelbtn{display:none!important}

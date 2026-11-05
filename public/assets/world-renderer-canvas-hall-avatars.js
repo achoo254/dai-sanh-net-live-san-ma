@@ -62,7 +62,7 @@ window.WorldRenderer = (() => {
     gr = g.createLinearGradient(0, 0, 0, WALL_Y); gr.addColorStop(0, '#5e351a'); gr.addColorStop(1, '#9a6239');
     g.fillStyle = gr; g.fillRect(0, 0, W, WALL_Y);
     g.fillStyle = 'rgba(0,0,0,.14)'; for (let x = 0; x < W; x += 58) g.fillRect(x, 0, 2, WALL_Y);
-    const wins = [140, 560, 1640, 2060];
+    const wins = []; for (let x = 120; x < W - 300; x += 470) if (Math.abs(x + 120 - W / 2) > 520) wins.push(x);
     wins.forEach(x => {
       const wy = 14, ww = 240, wh = 86;
       const sky = g.createLinearGradient(0, wy, 0, wy + wh); sky.addColorStop(0, '#dff3ff'); sky.addColorStop(.55, '#bfe6a8'); sky.addColorStop(1, '#8fcf74');
@@ -73,7 +73,8 @@ window.WorldRenderer = (() => {
       g.lineWidth = 5; g.beginPath(); g.moveTo(x + ww / 3, wy); g.lineTo(x + ww / 3, wy + wh); g.moveTo(x + ww * 2 / 3, wy); g.lineTo(x + ww * 2 / 3, wy + wh);
       g.moveTo(x, wy + wh / 2); g.lineTo(x + ww, wy + wh / 2); g.stroke();
     });
-    [0, 470, 940, 1460, 1930, W - 30].forEach(x => {
+    const pillars = []; for (let x = 0; x < W; x += 470) pillars.push(x); pillars.push(W - 30);
+    pillars.forEach(x => {
       g.fillStyle = '#45260f'; g.fillRect(x, 0, 30, WALL_Y);
       g.fillStyle = '#6b3d1c'; g.fillRect(x + 6, 0, 10, WALL_Y);
     });
@@ -235,7 +236,8 @@ window.WorldRenderer = (() => {
       }
       // Nội thất văn phòng khác (bản 2D vẽ dạng khối có nhãn)
       const KIND = { serverroom:['#24303f', 'PHÒNG MÁY CHỦ · CLOUD'], reception:['#f7f9fc', 'LỄ TÂN'], logowall:['#1d2b3f', 'iNET'],
-                     desks:['#e8d6b8', 'Khu làm việc'], meeting:['#cfe8ff', ''], pantry:['#f2f4f7', 'Pantry'], sofa:['#5b6b8c', 'Sofa'] };
+                     desks:['#e8d6b8', 'Khu làm việc'], meeting:['#cfe8ff', ''], pantry:['#f2f4f7', 'Pantry'], sofa:['#5b6b8c', 'Sofa'],
+                     beanbag:['#7c3aed', ''], water:['#dfe6ee', ''], pillar:['#9aa5b4', ''] };
       OBSTACLES.filter(o => KIND[o.kind]).forEach(o => ents.push({ y: o.y + o.h, f: () => {
         const [c, label] = KIND[o.kind];
         roundRect(ctx, o.x, o.y, o.w, o.h, 10); ctx.fillStyle = c; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 3; ctx.stroke();

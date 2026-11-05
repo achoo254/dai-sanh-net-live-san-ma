@@ -60,7 +60,7 @@ Thêm người chơi ảo cho sảnh đông: `node server/load-test-simulate-man
 | `PUZZLE_TIERS` | Cấp mật thư theo dịch vụ (JSON) | `{"domain":1,"email":1,"hosting":2,"ssl":2,"vps":3,"super":3}` |
 | `PUZZLE_HOLD_SEC` / `PUZZLE_ATTEMPTS` | Giữ mã khi đang giải / số lần thử | `90` / `3` |
 | `LOADTEST_REVEAL_ANSWERS` | **Chỉ để load test** (chỉ có tác dụng khi `DEMO_LOOP=1`): gửi kèm đáp án cho bot. KHÔNG bật khi chạy thật | tắt |
-| `ROOM_CAP` | Số người tối đa mỗi sảnh (gửi vị trí liên tục nên để ~100) | `100` |
+| `ROOM_CAP` | Số người tối đa mỗi sảnh (đồng bộ theo vùng quan tâm) | `150` |
 | `PIECES` | Số mảnh để nhận 1 mã | `5` |
 | `MAX_CODES_SESSION` | Mã tối đa mỗi người mỗi phiên (không tính Siêu Deal) | `2` |
 | `SLOT_RATIO` / `SLOT_MAX` | Số suất mỗi hộp = số người trong sảnh × tỉ lệ, tối đa | `0.15` / `10` |
@@ -159,7 +159,11 @@ Nâng giới hạn kết nối hệ điều hành: `worker_connections 20000;` t
 
 ## 6c. Hiệu năng bản 3D (đo 05/11/2026, laptop Intel UHD 620)
 
-Thời gian vẽ 1 khung hình khi 101 nhân vật cùng trên màn hình: **≈ 5,7 ms (p50)**, 390 lệnh vẽ (ban đầu 19,8 ms / 890 lệnh). Tối ưu đã làm: gộp toàn bộ nội thất tĩnh thành 1 lưới; chỉ 30 người gần nhất vẽ đầy đủ (tên, bóng, hoạt cảnh), người xa gộp thành 1 lưới. **Chưa đo trên điện thoại thật** — cần thử trên Android tầm trung trước ngày chạy.
+**Mặt bằng mở rộng 4000 × 2600** (gấp 2,7 lần), mục tiêu **1.000 người cùng lúc = 7 sảnh × 150 người**. Mỗi người chỉ nhận vị trí của người/virus trong bán kính 1.700 quanh mình (5–6 lần/giây), cứ ~2 giây nhận toàn bộ 1 lần để bản đồ nhỏ không lệch → băng thông mỗi sảnh giảm ~5 lần so với gửi tất cả.
+
+Đồ hoạ: tone mapping ACES, **bóng đổ thật trên máy tính** (điện thoại dùng bóng tròn), sàn gỗ bóng nhẹ, thảm màu từng khu dịch vụ, 8 cụm bàn có màn hình + vách ngăn, 2 phòng họp kính có TV, phòng máy chủ sàn xanh, lounge (sofa, kệ sách, bean bag), pantry, cây nước, cột tròn, poster 5 dịch vụ trên tường kính, bảng trắng, đèn thả trần, neon BLACK FRIDAY ở lễ tân, vòng sáng + tia lấp lánh quanh hộp quà.
+
+Thời gian vẽ 1 khung hình khi 101 nhân vật cùng trên màn hình (bản cũ): ≈ 5,7 ms. **Chưa đo lại với bóng đổ** và **chưa đo trên điện thoại thật** — cần thử Android tầm trung trước ngày chạy; nếu chậm, tắt bóng đổ (biến `shadows` trong `office3d-office-scene-renderer.js`) hoặc giảm `NEAR_N`.
 
 ## 7. Kết quả load test đã chạy (05/11/2026, laptop Windows, bot chạy CHUNG máy với máy chủ)
 

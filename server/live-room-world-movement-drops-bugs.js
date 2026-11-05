@@ -10,7 +10,7 @@
 const WR = require('../public/assets/world-map-rules-shared.js');
 
 const SERVICES = ['domain', 'hosting', 'vps', 'ssl', 'email'];
-const TICK_MS = 66, SNAP_EVERY = 3;
+const TICK_MS = 66, SNAP_EVERY = 4;            // 15 nhịp/giây, gửi ảnh chụp mỗi 4 nhịp (~3,75 lần/giây; trình duyệt nội suy cho mượt)
 // Quỹ quãng đường dự phòng (giây đi bộ). Phải NHỎ: quỹ này đầy lên khi đứng chờ, kẻ gian lận dùng nó "nhảy" lên trước
 // lúc hộp vừa rơi (đo được: quỹ 0,3s → bot gian lận thắng 89% cuộc đua 1 suất). 0,15s ≈ 42 đơn vị, chỉ hơn 1 gói vị trí.
 const BURST_SEC = 0.15;            // 15 nhịp/giây, gửi ảnh chụp mỗi 3 nhịp (~5–6 lần/giây)
@@ -191,10 +191,28 @@ class Room {
       for (const d of this.drops.values()) if (now > d.until + 200) this.removeDrop(d, 'ttl');
     }
     if (this.tickN % SNAP_EVERY) return;
-    const moved = [];
-    for (const p of this.members) if (p.moved){ p.moved = false; moved.push([p.rid, r1(p.x), r1(p.y)]); }
-    const bugs = this.live ? this.bugs.map(b => [b.id, r1(b.x), r1(b.y)]) : null;
-    if (moved.length || (bugs && bugs.length)) this.broadcast(bugs ? { t:'snap', p: moved, b: bugs } : { t:'snap', p: moved });
+    // Mỗi mục được đóng gói thành chuỗi MỘT LẦN; ảnh chụp cho từng người chỉ là ghép chuỗi (không JSON.stringify lại)
+    const moved = [], bugs = [];
+    for (const p of this.members) if (p.moved){ p.moved = false; moved.push({ s:`[${p.rid},${r1(p.x)},${r1(p.y)}]`, x:p.x, y:p.y }); }
+    if (this.live) for (const b of this.bugs) bugs.push({ s:`[${b.id},${r1(b.x)},${r1(b.y)}]`, x:b.x, y:b.y });
+    if (!moved.length && !bugs.length) return;
+    const pack = (pm, pb) => `{"t":"snap","p":[${pm.join(',')}]${pb.length ? `,"b":[${pb.join(',')}]` : ''}}`;
+    // Sảnh nhỏ hoặc ~2 giây/lần: gửi tất cả (để bản đồ nhỏ và người ở xa không lệch quá lâu)
+    const full = this.size <= 40 || this.tickN % (SNAP_EVERY * 10) === 0;
+    if (full){
+      const s = pack(moved.map(m => m.s), bugs.map(b => b.s));
+      for (const p of this.members) p.sendRaw(s);
+      return;
+    }
+    // Vùng quan tâm: mỗi người chỉ nhận vị trí của người/virus trong bán kính AOI_R quanh mình
+    // (150 người/sảnh → băng thông giảm ~5 lần so với gửi tất cả)
+    const R2 = WR.AOI_R * WR.AOI_R;
+    for (const p of this.members){
+      const pm = [], pb = [];
+      for (const m of moved) if ((m.x - p.x) ** 2 + (m.y - p.y) ** 2 <= R2) pm.push(m.s);
+      for (const b of bugs) if ((b.x - p.x) ** 2 + (b.y - p.y) ** 2 <= R2) pb.push(b.s);
+      if (pm.length || pb.length) p.sendRaw(pack(pm, pb));
+    }
   }
 }
 

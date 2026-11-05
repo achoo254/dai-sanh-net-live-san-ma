@@ -1,10 +1,10 @@
 /* =============================================================================
  * iNET Tech Office — luật bản đồ DÙNG CHUNG cho máy chủ (Node) và trình duyệt (3D + 2D dự phòng)
- * Mặt bằng văn phòng công ty công nghệ 2400 × 1500 đơn vị (≈ 24 m × 15 m, 1 đơn vị ≈ 1 cm):
+ * Mặt bằng văn phòng 4000 × 2600 đơn vị (≈ 40 m × 26 m, 1 đơn vị ≈ 1 cm) — mở rộng cho sảnh 150 người:
  *   - Lễ tân + tường logo iNET (cửa vào phía dưới)   - Phòng máy chủ kính (giữa phía trên) = khu Cloud/VPS
- *   - 4 cụm bàn làm việc mở                          - Phòng họp kính (dưới phải)
- *   - Pantry + sofa (dưới trái)                      - Atrium giữa: bục Siêu Deal + màn LED treo
- *   - 4 quầy: Tên miền, Hosting, Bảo mật SSL, CSKH Email
+ *   - 8 cụm bàn làm việc mở                          - 2 phòng họp kính (OneShield, OnePanel)
+ *   - Pantry + lounge (dưới trái), góc thư giãn       - Atrium giữa: bục Siêu Deal + màn LED
+ *   - 4 quầy: Tên miền (trên trái), Hosting (trên phải), Bảo mật SSL (giữa trái), CSKH Email (giữa phải)
  *   - 6 điểm giấu manh mối mật thư cấp 3
  * Node: require('../public/assets/world-map-rules-shared.js') · Browser: window.WorldRules
  * ============================================================================= */
@@ -14,60 +14,64 @@
 })(typeof self !== 'undefined' ? self : this, function(){
   'use strict';
 
-  const W = 2400, H = 1500;
-  const WALL_Y = 120;                 // tường sau (phía trên bản đồ)
-  const MARGIN = 60;
-  const SPEED = 280;                  // tốc độ đi bộ (đơn vị/giây)
+  const W = 4000, H = 2600;
+  const WALL_Y = 140;                 // tường sau (phía trên bản đồ)
+  const MARGIN = 70;
+  const SPEED = 300;                  // tốc độ đi bộ (đơn vị/giây) — sảnh rộng hơn nên đi nhanh hơn chút
   const FOOT_R = 16;
-  const PICK_R = 58;                  // tới gần hộp trong bán kính này là nhặt
-  const BUG_R = 46;
-  const BUG_SPEED = 110;
-  const CLUE_R = 95;                  // đứng gần điểm manh mối trong bán kính này là đọc được
+  const PICK_R = 62;                  // tới gần hộp trong bán kính này là nhặt
+  const BUG_R = 48;
+  const BUG_SPEED = 120;
+  const CLUE_R = 110;                 // đứng gần điểm manh mối trong bán kính này là đọc được
+  const AOI_R = 1150;                 // bán kính "vùng quan tâm" (màn hình thấy ~1500×1000 quanh mình): chỉ nhận vị trí người trong vùng này thường xuyên
 
   // 5 khu dịch vụ: vị trí nhân viên đứng quầy (hộp quà rơi quanh đây)
   const BOOTHS = {
-    domain:  { x: 420,  y: 330 },
-    hosting: { x: 1980, y: 330 },
-    vps:     { x: 1200, y: 400 },     // trước vách kính phòng máy chủ
-    ssl:     { x: 330,  y: 820 },
-    email:   { x: 2070, y: 820 }
+    domain:  { x: 560,  y: 420 },
+    hosting: { x: 3440, y: 420 },
+    vps:     { x: 2000, y: 520 },     // trước vách kính phòng máy chủ
+    ssl:     { x: 400,  y: 1450 },
+    email:   { x: 3600, y: 1450 }
   };
   const ZONE_NAMES = { domain:'Tên miền', hosting:'Hosting', vps:'Cloud · Phòng máy chủ', ssl:'Bảo mật SSL', email:'CSKH · Email' };
-  const STAGE = { x: 1200, y: 800, r: 150 };   // atrium + bục Siêu Deal
-  const SPAWN = { x: 1200, y: 1410 };          // cửa vào
+  const STAGE = { x: 2000, y: 1350, r: 200 };  // atrium + bục Siêu Deal
+  const SPAWN = { x: 2000, y: 2500 };          // cửa vào
 
   // Vật cản (hình chữ nhật trên mặt sàn). kind dùng để dựng mô hình 3D tương ứng.
   const OBSTACLES = [];
   ['domain', 'hosting', 'ssl', 'email'].forEach(id => {
     const b = BOOTHS[id];
-    OBSTACLES.push({ x: b.x - 115, y: b.y - 8, w: 230, h: 58, kind:'counter', id });
+    OBSTACLES.push({ x: b.x - 125, y: b.y - 8, w: 250, h: 60, kind:'counter', id });
   });
   OBSTACLES.push(
-    { x: 950,  y: WALL_Y, w: 500, h: 210, kind:'serverroom', id:'vps' },
-    { x: 860,  y: 1250,   w: 220, h: 60,  kind:'reception' },
-    { x: 840,  y: 1180,   w: 260, h: 22,  kind:'logowall' },
-    { x: 620,  y: 520,    w: 280, h: 120, kind:'desks' },
-    { x: 1500, y: 520,    w: 280, h: 120, kind:'desks' },
-    { x: 620,  y: 1000,   w: 280, h: 120, kind:'desks' },
-    { x: 1500, y: 1000,   w: 280, h: 120, kind:'desks' },
-    { x: 1720, y: 1180,   w: 420, h: 220, kind:'meeting', name:'Phòng họp OneShield' },
-    { x: 180,  y: 1360,   w: 340, h: 70,  kind:'pantry' },
-    { x: 260,  y: 1150,   w: 260, h: 64,  kind:'sofa' },
-    { x: 80,   y: 150,    w: 80,  h: 70,  kind:'plant' },
-    { x: 2240, y: 150,    w: 80,  h: 70,  kind:'plant' },
-    { x: 80,   y: 1020,   w: 80,  h: 70,  kind:'plant' },
-    { x: 2240, y: 1020,   w: 80,  h: 70,  kind:'plant' },
-    { x: 1500, y: 1330,   w: 70,  h: 70,  kind:'plant' }
+    { x: 1600, y: WALL_Y, w: 800, h: 280, kind:'serverroom', id:'vps' },
+    { x: 1860, y: 2330,   w: 280, h: 64,  kind:'reception' },
+    { x: 1830, y: 2250,   w: 340, h: 24,  kind:'logowall' },
+    { x: 700,  y: 800,    w: 300, h: 130, kind:'desks' }, { x: 1250, y: 800,  w: 300, h: 130, kind:'desks' },
+    { x: 2450, y: 800,    w: 300, h: 130, kind:'desks' }, { x: 3000, y: 800,  w: 300, h: 130, kind:'desks' },
+    { x: 1050, y: 1750,   w: 300, h: 130, kind:'desks' }, { x: 2650, y: 1750, w: 300, h: 130, kind:'desks' },
+    { x: 3100, y: 2100,   w: 540, h: 330, kind:'meeting', name:'Phòng họp OneShield' },
+    { x: 360,  y: 2100,   w: 540, h: 330, kind:'meeting', name:'Phòng họp OnePanel' },
+    { x: 1000, y: 2460,   w: 440, h: 76,  kind:'pantry' },
+    { x: 560,  y: 1880,   w: 300, h: 66,  kind:'sofa' },
+    { x: 1250, y: 2250,   w: 70,  h: 70,  kind:'beanbag' }, { x: 1340, y: 2300, w: 70, h: 70, kind:'beanbag' },
+    { x: 2700, y: 2440,   w: 90,  h: 40,  kind:'water' },
+    { x: 1600, y: 1120,   w: 44,  h: 44,  kind:'pillar' }, { x: 2356, y: 1120, w: 44, h: 44, kind:'pillar' },
+    { x: 1600, y: 1600,   w: 44,  h: 44,  kind:'pillar' }, { x: 2356, y: 1600, w: 44, h: 44, kind:'pillar' },
+    { x: 90,   y: 170,    w: 80,  h: 70,  kind:'plant' },  { x: 3830, y: 170,  w: 80, h: 70, kind:'plant' },
+    { x: 90,   y: 1200,   w: 80,  h: 70,  kind:'plant' },  { x: 3830, y: 1200, w: 80, h: 70, kind:'plant' },
+    { x: 1500, y: 2440,   w: 70,  h: 70,  kind:'plant' },  { x: 2440, y: 2440, w: 70, h: 70, kind:'plant' },
+    { x: 1150, y: 1100,   w: 60,  h: 60,  kind:'plant' },  { x: 2800, y: 1100, w: 60, h: 60, kind:'plant' }
   );
 
   // Điểm giấu manh mối mật thư cấp 3 (đề sẽ chỉ định 2–3 điểm trong số này)
   const CLUE_SPOTS = {
-    pantry:    { x: 350,  y: 1300, name:'Bảng ghim Pantry' },
-    server:    { x: 1200, y: 365,  name:'Vách kính phòng máy chủ' },
-    reception: { x: 1160, y: 1290, name:'Quầy lễ tân' },
-    meeting:   { x: 1670, y: 1290, name:'Cửa phòng họp OneShield' },
-    lounge:    { x: 600,  y: 1180, name:'Góc sofa thư giãn' },
-    atrium:    { x: 1200, y: 600,  name:'Dưới màn LED atrium' }
+    pantry:    { x: 1220, y: 2380, name:'Bảng ghim Pantry' },
+    server:    { x: 2000, y: 480,  name:'Vách kính phòng máy chủ' },
+    reception: { x: 1960, y: 2290, name:'Quầy lễ tân' },
+    meeting:   { x: 3050, y: 2200, name:'Cửa phòng họp OneShield' },
+    lounge:    { x: 760,  y: 2000, name:'Góc sofa thư giãn' },
+    atrium:    { x: 2000, y: 1040, name:'Dưới màn LED atrium' }
   };
 
   function blocked(x, y){
@@ -108,15 +112,15 @@
   function dropPointNearBooth(id, rand = Math.random){
     const b = BOOTHS[id] || STAGE;
     for (let i = 0; i < 40; i++){
-      const a = rand() * Math.PI * 2, d = 140 + rand() * 300;
-      const p = clampWalkable(b.x + Math.cos(a) * d, b.y + 90 + Math.sin(a) * d * 0.8);
+      const a = rand() * Math.PI * 2, d = 170 + rand() * 380;
+      const p = clampWalkable(b.x + Math.cos(a) * d, b.y + 100 + Math.sin(a) * d * 0.8);
       if (!blocked(p.x, p.y)) return p;
     }
     return randomWalkable(rand);
   }
   function spawnPoint(rand = Math.random){
     for (let i = 0; i < 20; i++){
-      const p = { x: SPAWN.x + (rand() - .5) * 300, y: SPAWN.y - rand() * 60 };
+      const p = { x: SPAWN.x + (rand() - .5) * 400, y: SPAWN.y - rand() * 60 };
       if (!blocked(p.x, p.y)) return p;
     }
     return { x: SPAWN.x, y: SPAWN.y };
@@ -130,7 +134,7 @@
   }
   const dist2 = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
 
-  return { W, H, WALL_Y, MARGIN, SPEED, FOOT_R, PICK_R, BUG_R, BUG_SPEED, CLUE_R,
+  return { W, H, WALL_Y, MARGIN, SPEED, FOOT_R, PICK_R, BUG_R, BUG_SPEED, CLUE_R, AOI_R,
            BOOTHS, ZONE_NAMES, STAGE, SPAWN, OBSTACLES, CLUE_SPOTS,
            blocked, moveWithCollision, moveSteppedWithCollision, clampWalkable, randomWalkable, dropPointNearBooth, spawnPoint, stepBug, dist2 };
 });

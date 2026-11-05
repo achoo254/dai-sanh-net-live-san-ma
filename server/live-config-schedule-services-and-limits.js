@@ -50,21 +50,21 @@ const config = {
   liveSec: num(env.LIVE_SEC, 480),              // mỗi phiên live 8 phút (đủ thời gian giải mật thư)
 
   // Luật chơi
-  roomCap: num(env.ROOM_CAP, 100),              // tối đa người/sảnh (phải gửi vị trí liên tục nên để ~100), đông hơn mở sảnh mới
+  roomCap: num(env.ROOM_CAP, 150),              // tối đa người/sảnh (đồng bộ theo vùng quan tâm nên 150 vẫn nhẹ), đông hơn mở sảnh mới
   piecesToUnlock: num(env.PIECES, 5),           // gom đủ N mảnh của 1 dịch vụ → nhận mã
   maxCodesPerSession: num(env.MAX_CODES_SESSION, 2),
   maxCodesPerServicePerDay: 1,
   maxSuperPerDay: 1,
-  slotRatio: num(env.SLOT_RATIO, 0.15),         // mỗi hộp quà có K = ceil(số người trong sảnh × 15%) suất
-  slotMax: num(env.SLOT_MAX, 10),
+  slotRatio: num(env.SLOT_RATIO, 0.12),         // mỗi hộp quà có K = ceil(số người trong sảnh × 12%) suất
+  slotMax: num(env.SLOT_MAX, 12),
   superSlotsPerDrop: num(env.SUPER_SLOTS, 5),
   superAtFractions: [0.18, 0.58, 0.93],         // Siêu Deal xuất hiện ở ~phút 1, 3, 5 của phiên 5 phút
   superWarnMs: 5000,
   dropTtlMs: 7000,                              // hộp nằm trên sàn 7 giây (đủ thời gian chạy tới)
   superTtlMs: 6000,
-  dropEveryMs: [900, 550],                      // nhịp thả hộp: đầu phiên → cuối phiên
-  maxActiveDrops: 10,
-  bugBase: 3, bugMax: 8,                        // số bọ DDoS: 3 + 1 con mỗi 25 người, tối đa 8
+  dropEveryMs: [700, 420],                      // nhịp thả hộp: đầu phiên → cuối phiên
+  maxActiveDrops: 16,                           // văn phòng 4000×2600 rộng hơn → nhiều hộp cùng lúc hơn
+  bugBase: 4, bugMax: 12,                       // số virus DDoS: 4 + 1 con mỗi 25 người, tối đa 12
   stunMs: 3000,                                 // chạm DDoS bị "đơ" 3 giây
   shieldMs: 5000,
   points: { gift:10, super:50, shieldBlock:5, puzzle:30, puzzleSpeed:50 },   // giải mật thư +30, giải nhanh thêm tới +50

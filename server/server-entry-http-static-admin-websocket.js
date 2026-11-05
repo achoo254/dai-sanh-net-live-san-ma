@@ -16,6 +16,20 @@ const cfg = require('./live-config-schedule-services-and-limits');
 const { CodeStore } = require('./code-store-sqlite-atomic-issue-import-export');
 const { Hub } = require('./live-hub-sessions-players-stock-leaderboard');
 
+/* ---------- Đo hiệu năng (dev): PROFILE_SEC=60 → ghi CPU profile vào server/data/cpu-<time>.cpuprofile ---------- */
+if (process.env.PROFILE_SEC){
+  const { Session } = require('inspector');
+  const ses = new Session(); ses.connect();
+  ses.post('Profiler.enable', () => ses.post('Profiler.start', () => {
+    setTimeout(() => ses.post('Profiler.stop', (err, { profile }) => {
+      if (err) return console.error(err);
+      const out = path.join(__dirname, 'data', `cpu-${Date.now()}.cpuprofile`);
+      fs.mkdirSync(path.dirname(out), { recursive:true }); fs.writeFileSync(out, JSON.stringify(profile));
+      console.log('[profile] đã ghi', out);
+    }), +process.env.PROFILE_SEC * 1000);
+  }));
+}
+
 /* ---------- Khởi tạo ---------- */
 const store = new CodeStore(cfg.dbFile);
 const validServices = [...cfg.services.map(s => s.id), 'super'];
@@ -225,7 +239,7 @@ const heartbeat = setInterval(() => {
   }
 }, 30000);
 
-server.listen(cfg.port, cfg.host, () => {
+server.listen({ port: cfg.port, host: cfg.host, backlog: 4096 }, () => {   // hàng đợi kết nối lớn: cả nghìn người vào cùng lúc đầu phiên
   const st = hub.state;
   console.log(`[live] Đại Sảnh Nét chạy tại http://localhost:${cfg.port}  (pha: ${st.phase}${cfg.demoLoop ? ', DEMO_LOOP' : ''})`);
   if (st.next) console.log(`[live] Phiên kế tiếp: ${st.next.title} — ${new Date(st.next.start).toLocaleString('vi-VN', { timeZone:'Asia/Ho_Chi_Minh' })}`);
