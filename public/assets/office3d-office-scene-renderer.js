@@ -379,7 +379,7 @@ function buildAtrium(parent, api){
 }
 
 function buildStandees(parent){
-  const spots = [{ pose:'wave', x: 1760, z: 2300 }];
+  const spots = [{ pose:'wave', x: 2210, z: 2400 }];               // bé Nét vẫy chào cạnh quầy lễ tân
   for (const id in BOOTHS){ const b = BOOTHS[id]; spots.push({ pose: BOOTH_POSE[id], x: b.x + (id === 'vps' ? 320 : 170), z: b.y + 40 }); }
   SP.ready.then(() => spots.forEach(s => {
     const im = SP.mascot[s.pose]; if (!im || !im.naturalWidth) return;

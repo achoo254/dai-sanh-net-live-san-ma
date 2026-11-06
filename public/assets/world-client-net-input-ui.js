@@ -79,7 +79,7 @@ const S = {                                     // trạng thái để vẽ
 };
 const G = { score:0, pieces:{}, claimed:new Set(), codes:[], top:[] };   // trạng thái phiên của em
 let services = PRACTICE ? PRACTICE_SERVICES : [], need = 5, myRid = 0;
-let link = null, joined = false, retry = 0, stopReconnect = false, siteKey = '', tsWidget = null;
+let link = null, joined = false, retry = 0, stopReconnect = false, siteKey = '', tsWidget = null, chatAutoOpened = false;
 let offset = 0, phase = { phase:'idle', session:null, next:null }, sessionId = null;
 let me = { pid: store.get('netLive.pid'), nick: store.get('netLive.nick') || '', avatar: store.get('netLive.look') || CharacterCustomizer.str(CharacterCustomizer.random()) };
 if (!me.pid || !/^[A-Za-z0-9_-]{8,40}$/.test(me.pid)){
@@ -99,6 +99,8 @@ const chat = ChatBox.create({ root: $('#chat'), btn: $('#chatBtn'), badge: $('#c
   onSend: text => send({ t:'chat', m:text }), onReport: id => send({ t:'report', id }) });
 const pz = PuzzlePanel.create({ root: $('#puzzle'), onSubmit: (id, a) => send({ t:'ans', id, a }),
   svcName: svc => svc === 'super' ? 'Siêu Deal' : (S.names[svc] || svc) });
+const arrows = TargetArrows.create(stage);
+const roomLabel = id => String(id || '').replace(/^S/, '');          // máy chủ đặt tên sảnh "S1" → hiện "Sảnh 1"
 $('#nick').value = me.nick;
 if (PRACTICE){
   stage.classList.add('practice');
@@ -167,7 +169,7 @@ async function connect(){
   ws.onopen = () => { retry = 0; ws.send(JSON.stringify({ t:'hello', pid: me.pid, nick: me.nick, avatar: me.avatar, ts: token })); };
   ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch(err){ return; } handle(m); };
   ws.onclose = e => {
-    const fatal = { 4002:'Thiết bị không hợp lệ, em tải lại trang nhé.', 4003:'Biệt danh cần 2–16 ký tự.',
+    const fatal = { 4002:'Thiết bị không hợp lệ, em tải lại trang nhé.', 4003:'Biệt danh cần 2–16 ký tự.', 4005:'Biệt danh chưa phù hợp (không dùng từ thô tục, link, số điện thoại). Em đổi tên khác nhé.',
                     4004:'Chưa qua bước xác minh chống bot, em thử lại nhé.', 4001:'Em đang mở sảnh ở một tab/thiết bị khác.' }[e.code];
     if (fatal){
       stopReconnect = true; joined = false; stage.classList.remove('joined'); store.set('netLive.auto', '0');
@@ -215,7 +217,8 @@ function handle(m){
         if (typeof m.score === 'number'){ G.score = m.score; updateScore(); }
         if (m.code) gotCode(m.code); else { toast('Giải đúng mật thư!'); sfx.code(); }
         track('puzzle_solved', { ms:m.ms });
-      } else if (!m.slow){ sfx.bug(); if (m.end === 'expired'){ S.puzzle = null; pz.close(); toast('Mã giữ chỗ đã hết hạn', 'warn'); } }
+      } else if (m.needClues){ toast(`Đi đọc thêm ${m.needClues} manh mối rồi mới trả lời được`, 'warn'); sfx.warn(); }
+      else if (!m.slow){ sfx.bug(); if (m.end === 'expired'){ S.puzzle = null; pz.close(); toast('Mã giữ chỗ đã hết hạn', 'warn'); } }
       return;
     case 'puzzle_end':
       S.puzzle = null; pz.end(m);
@@ -244,7 +247,8 @@ function onWelcome(m){
   S.me.x = m.you.x; S.me.y = m.you.y; S.me.avatar = m.you.avatar; S.me.nick = m.you.nick; S.target = null;
   S.puzzle = null; pz.close();
   chat.load(m.chat || [], myRid); chat.setMuted(m.chatMutedUntil || 0);
-  $('#chatRoom').textContent = m.room ? (PRACTICE ? 'Luyện tay' : 'Sảnh ' + m.room) : '';
+  if (stage.classList.contains('wide') && !chatAutoOpened){ chatAutoOpened = true; chat.open(true, false); }   // máy tính: mở sẵn khung chat (không cướp phím)
+  $('#chatRoom').textContent = m.room ? (PRACTICE ? 'Luyện tay' : 'Sảnh ' + roomLabel(m.room)) : '';
   S.others.clear(); (m.roster || []).forEach(addOther);
   S.drops.clear(); (m.drops || []).forEach(d => onDrop(d, true));
   G.score = m.state.score; G.pieces = m.state.pieces || {}; G.codes = m.state.codes || []; G.claimed = new Set(m.state.claimed || []);
@@ -299,7 +303,7 @@ function gotCode(code){
   G.codes.push(code); G.claimed.add(code.service);
   const name = code.service === 'super' ? 'Siêu Deal' : (S.names[code.service] || code.service);
   toast(`Em nhận được mã ${name}!`); sfx.code(); renderCodes(); track('code', { service: code.service });
-  $('#panelBtn').textContent = `Mã của em (${G.codes.length}) ✨`;
+  if (!$('#panel').classList.contains('open')) $('#panelBtn').textContent = `Mã của em (${G.codes.length}) ✨`;
 }
 function onEmote(m){
   const t = Date.now() + 2800, txt = EMOTES[m.i] || '';
@@ -317,7 +321,7 @@ function onChat(m){
 }
 function onRoom(m){
   const o = $('#online'); o.hidden = false;
-  o.textContent = PRACTICE ? `Luyện tay cùng ${m.n - 1} bot` : `${m.online.toLocaleString('vi-VN')} người online · Sảnh ${m.room}${m.rooms > 1 ? '/' + m.rooms : ''}`;
+  o.textContent = PRACTICE ? `Luyện tay cùng ${m.n - 1} bot` : `${m.online.toLocaleString('vi-VN')} người online · Sảnh ${roomLabel(m.room)}${m.rooms > 1 ? '/' + m.rooms : ''}`;
 }
 
 /* ---------- Pha phiên ---------- */
@@ -332,7 +336,10 @@ function setPhase(p){
   }
   if (p.phase === 'lobby' || p.phase === 'live') sessionId = sid;
   if (prev === 'live' && p.phase !== 'live'){ S.drops.clear(); S.bugs.clear(); }
-  if (p.phase === 'live' && prev !== 'live' && joined){ showCount('Săn!'); sfx.super(); $('#screenResult').hidden = true; track('live_start'); }
+  if (p.phase === 'live' && prev !== 'live' && joined){
+    showCount('Săn!'); sfx.super(); $('#screenResult').hidden = true; track('live_start');
+    setTimeout(() => toast('Đi theo mũi tên ở mép màn hình tới hộp quà gần nhất!'), 900);
+  }
   S.live = p.phase === 'live';
   stage.classList.toggle('playing', S.live);
   const el = $('#phase'); el.className = 'phase ' + p.phase;
@@ -466,7 +473,33 @@ function frame(t){
   for (const b of S.bugs.values()){ b.x += (b.tx - b.x) * a; b.y += (b.ty - b.y) * a; }
   R.render(S, now);
   if (t - lastMini > 200){ lastMini = t; R.drawMinimap(mini, S); }
+  if (t - lastArrows > 100){ lastArrows = t; updateArrows(); }
   requestAnimationFrame(frame);
+}
+/* Mũi tên mép màn hình: 3 hộp quà gần nhất (ưu tiên dịch vụ em còn thiếu mảnh), Siêu Deal, manh mối mật thư cấp 3 */
+let lastArrows = 0;
+const panelEl = $('#panel');
+function updateArrows(){
+  if (!joined){ arrows.clear(); return; }
+  const me_ = S.me, list = [], d2 = o => (o.x - me_.x) ** 2 + (o.y - me_.y) ** 2;
+  if (S.puzzle && S.puzzle.clues) S.puzzle.clues.forEach(c => {
+    const sp = WR.CLUE_SPOTS[c.spot];
+    if (sp && !c.text) list.push({ key:'clue:' + c.spot, x:sp.x, y:sp.y, color:'#ffcf3a', label:'Manh mối', hot:true });
+  });
+  if (S.live){
+    const gifts = [];
+    for (const d of S.drops.values()){
+      if (d.mine || d.until < Date.now()) continue;
+      if (d.kind === 'super') list.push({ key:d.id, x:d.x, y:d.y, color:'#ffcf3a', label:'Siêu Deal', hot:true });
+      else if (d.kind === 'gift') gifts.push(d);
+    }
+    const want = gifts.filter(d => !G.claimed.has(d.svc));
+    (want.length ? want : gifts).sort((a, b) => d2(a) - d2(b)).slice(0, 3).forEach(d =>
+      list.push({ key:d.id, x:d.x, y:d.y, color: SP.SVC_COLORS[d.svc], label: Math.max(1, Math.round(Math.sqrt(d2(d)) / 100)) + ' m' }));
+  }
+  const wide = stage.classList.contains('wide');
+  arrows.update(list, (x, y) => R.is3D ? R.toScreen(x, y, 40) : R.toScreen(x, y),
+    wide ? { l:16, r: panelEl.offsetWidth + 28, t:100, b:100 } : { l:10, r:10, t:210, b:92 });   // máy tính: chừa chỗ bảng Top bên phải
 }
 addEventListener('resize', () => { R.resize(); layoutClass(); });
 // Lăn chuột để zoom (bản 3D)
@@ -587,9 +620,9 @@ document.addEventListener('click', async e => {
   if (e.target.closest('[data-use]')) track('use_code');
 });
 $('#btnShare').addEventListener('click', async () => {
-  const text = `Mình vừa dắt bé Nét săn được ${G.score} điểm${G.codes.length ? ` và ${G.codes.length} mã giảm giá` : ''} ở Đại Sảnh Nét Online – Black Friday của iNET! Vào săn cùng nhé:`;
+  const text = `Mình vừa săn được ${G.score} điểm${G.codes.length ? ` và ${G.codes.length} mã giảm giá` : ''} ở iNET Tech Office 3D – Black Friday 2026! Vào săn cùng nhé:`;
   const url = new URL('./', location.href).href;
-  try { if (navigator.share){ await navigator.share({ title:'Đại Sảnh Nét Online – Săn mã Black Friday', text, url }); return; } } catch(e){ return; }
+  try { if (navigator.share){ await navigator.share({ title:'iNET Tech Office 3D – Săn mã Black Friday', text, url }); return; } } catch(e){ return; }
   const ok = await copyText(text + ' ' + url), b = $('#btnShare'), old = b.textContent;
   b.textContent = ok ? 'Đã chép ✓' : 'Chia sẻ'; setTimeout(() => b.textContent = old, 1800);
 });

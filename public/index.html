@@ -78,6 +78,7 @@
   <!-- Vào văn phòng -->
   <div class="overlay sheet" id="screenJoin">
     <section class="card join3d" aria-labelledby="tJoin">
+      <div class="jmain">
       <h1 id="tJoin">iNET Tech Office <em>Săn mã Black Friday</em></h1>
       <p class="sub" id="joinSub">Phối đồ nhân vật, vào văn phòng công nghệ của iNET, chạy tới nhặt hộp quà cùng mọi người và <b>giải mật thư</b> để nhận mã giảm giá.</p>
       <div class="nextinfo" id="nextInfo">Đang tải lịch phiên…</div>
@@ -93,6 +94,9 @@
         <p class="err" id="joinErr" hidden></p>
       </form>
       <a class="btn ghost" id="practiceLink" href="?mode=practice" style="margin-top:8px">Luyện tay trong lúc chờ</a>
+      </div>
+      <div class="jside">
+      <h2 class="jside-t">Cách chơi</h2>
       <ul class="how">
         <li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#024799"/><path d="M8 12h8M12 8v8" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg><span><b>Chạm sàn</b> để đi, <b>kéo</b> để điều khiển, máy tính dùng <b>phím mũi tên/WASD</b>, lăn chuột để zoom.</span></li>
         <li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="9" width="16" height="11" rx="2" fill="#0582D4"/><rect x="3" y="6" width="18" height="5" rx="2" fill="#619ee9"/><rect x="11" y="6" width="2" height="14" fill="#ffe27a"/></svg><span>Hộp quà rơi quanh 5 khu dịch vụ, <b>ai tới trước nhặt được</b>. Gom đủ <b id="needN">5</b> mảnh một dịch vụ là mở <b>mật thư</b>.</span></li>
@@ -113,6 +117,7 @@
         </ul>
       </details>
       <p class="foot">© 2007 iNET — Nhà đăng ký Tên miền Việt Nam và Quốc tế<br>Kinh doanh: <a href="tel:19001232">1900 1232</a> · Kỹ thuật: <a href="tel:19006285">1900 6285</a></p>
+      </div>
     </section>
   </div>
 
@@ -123,10 +128,10 @@
       <div class="score"><b id="rScore">0</b><span>điểm</span></div>
       <div class="rank" id="rRank"></div>
       <div id="rCodes"></div>
-      <div class="panel" style="position:static;box-shadow:none;padding:0;background:none;display:block"><h3>Top 10</h3><ol id="rTop"></ol></div>
+      <div class="rtop"><h3>Top 10 phiên này</h3><ol id="rTop"></ol></div>
       <div class="nextinfo" id="rNext"></div>
       <div class="actions">
-        <button class="btn primary" id="rClose" type="button">Ở lại văn phòng chờ phiên sau</button>
+        <button class="btn primary" id="rClose" type="button">Ở lại sảnh chờ phiên sau</button>
         <div class="two">
           <a class="btn ghost" id="rAlt" href="?mode=practice">Luyện tay</a>
           <button class="btn ghost" id="btnShare" type="button">Chia sẻ</button>
@@ -145,6 +150,7 @@
 <script src="assets/office-character-customizer-ui.js"></script>
 <script src="assets/puzzle-panel-secret-letter-ui.js"></script>
 <script src="assets/chat-box-room-conversation-ui.js"></script>
+<script src="assets/offscreen-target-arrows-ui.js"></script>
 <script src="assets/world-client-net-input-ui.js"></script>
 </body>
 </html>

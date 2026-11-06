@@ -14,10 +14,13 @@ window.ChatBox = (() => {
     const log = root.querySelector('.chat-log'), form = root.querySelector('form'), input = root.querySelector('input');
     let unread = 0, mutedUntil = 0;
     function setUnread(n){ unread = n; badge.textContent = n > 9 ? '9+' : n; badge.hidden = !n; }
-    function open(v){
+    /** Mở/đóng khung chat. focus=false: mở sẵn mà không đặt con trỏ vào ô nhập (để phím WASD vẫn điều khiển nhân vật). */
+    function open(v, focus = true){
       root.classList.toggle('open', v); btn.setAttribute('aria-expanded', v);
-      if (v){ setUnread(0); log.scrollTop = log.scrollHeight; setTimeout(() => input.focus({ preventScroll:true }), 50); }
+      btn.classList.toggle('on', v);
+      if (v){ setUnread(0); log.scrollTop = log.scrollHeight; if (focus) setTimeout(() => input.focus({ preventScroll:true }), 50); }
     }
+    const isOpen = () => root.classList.contains('open');
     btn.addEventListener('click', () => open(!root.classList.contains('open')));
     root.querySelector('.chat-x').addEventListener('click', () => { open(false); input.blur(); });
     form.addEventListener('submit', e => {
@@ -26,11 +29,11 @@ window.ChatBox = (() => {
       if (mutedUntil > Date.now()){ sys('Em đang bị tạm khoá chat.', 'warn'); return; }
       onSend(v); input.value = '';
     });
-    input.addEventListener('keydown', e => { if (e.key === 'Escape'){ input.blur(); if (btn.offsetParent) open(false); } e.stopPropagation(); });
+    input.addEventListener('keydown', e => { if (e.key === 'Escape') input.blur(); e.stopPropagation(); });
     // Máy tính: bấm Enter khi đang chơi để gõ chat nhanh
     addEventListener('keydown', e => {
       if (e.key !== 'Enter' || (e.target.closest && e.target.closest('input, textarea, button')) || !root.closest('.stage.joined')) return;
-      e.preventDefault(); if (btn.offsetParent) open(true); else input.focus({ preventScroll:true });
+      e.preventDefault(); if (!isOpen()) open(true); else input.focus({ preventScroll:true });
     });
     log.addEventListener('click', e => {
       const b = e.target.closest('.rep'); if (!b || b.disabled) return;
@@ -54,7 +57,7 @@ window.ChatBox = (() => {
     }
     function add(m, mine){
       push(line(m, mine));
-      if (!mine && btn.offsetParent && !root.classList.contains('open')) setUnread(unread + 1);
+      if (!mine && !isOpen()) setUnread(unread + 1);
     }
     function sys(text, kind){
       const li = document.createElement('li'); li.className = 'sys ' + (kind || ''); li.textContent = text; push(li);

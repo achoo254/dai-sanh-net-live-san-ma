@@ -47,12 +47,20 @@ window.PuzzlePanel = (() => {
         : `<li><span>📍 ${esc(c.name)}</span><em>Đi tới điểm này trong văn phòng để đọc manh mối</em></li>`).join('');
     }
     function renderHints(){ $('#pzHints').innerHTML = z.hints.map((h, i) => `<p>💡 Gợi ý ${i + 1}: ${esc(h)}</p>`).join(''); }
-    function renderMeta(){ $('#pzMeta').textContent = `Còn ${z.attempts} lần thử · mã đang được giữ cho em`; }
+    // Dòng trạng thái: số lần thử + số giây còn giữ mã (thanh màu thôi thì khó ước lượng)
+    function renderMeta(){
+      if (!z) return;
+      const s = Math.max(0, Math.ceil((z.until - Date.now()) / 1000));
+      const need = z.clues.filter(c => !c.text).length;
+      $('#pzMeta').innerHTML = `Còn <b>${z.attempts}</b> lần thử · giữ mã cho em <b>${s}s</b>` +
+        (need ? ` · cần đọc thêm <b>${need}</b> manh mối` : '');
+    }
     function tick(){
       if (!z) return;
       const left = Math.max(0, z.until - Date.now());
       $('#pzBar').style.transform = `scaleX(${left / z.total})`;
       root.classList.toggle('urgent', left < 15000);
+      renderMeta();
     }
 
     return {
@@ -63,7 +71,7 @@ window.PuzzlePanel = (() => {
         $('#pzTier').textContent = TIER[m.tier] || ''; $('#pzTier').className = 'pz-badge t' + m.tier;
         $('#pzTitle').textContent = `Mật thư ${svcName(m.svc)}`;
         $('#pzQ').textContent = m.question;
-        $('#pzWin').hidden = true; $('#pzForm').hidden = false;
+        $('#pzWin').hidden = true; $('#pzForm').hidden = false; $('#pzMeta').hidden = false;
         $('#pzIn').value = ''; renderClues(); renderHints(); renderMeta();
         clearInterval(timer); timer = setInterval(tick, 200); tick();
         if (!m.clues || !m.clues.length) setTimeout(() => $('#pzIn').focus({ preventScroll:true }), 100);
@@ -78,7 +86,7 @@ window.PuzzlePanel = (() => {
         if (!z || m.id !== z.id) return false;
         if (m.ok){
           clearInterval(timer);
-          root.classList.add('win'); $('#pzForm').hidden = true;
+          root.classList.add('win'); $('#pzForm').hidden = true; $('#pzMeta').hidden = true;
           const c = m.code;
           $('#pzWin').hidden = false;
           $('#pzWin').innerHTML = `<p class="pz-ok">🔓 Giải mã thành công! +${m.bonus || 0} điểm</p>
@@ -90,6 +98,10 @@ window.PuzzlePanel = (() => {
           return true;
         }
         if (m.slow) return false;
+        if (m.needClues){                         // cấp 3 chưa đọc đủ manh mối: không mất lượt, nhắc đi tìm
+          root.classList.remove('min'); collapsed = false; $('#pzMin').textContent = '–';
+          renderMeta(); return false;
+        }
         z.attempts = m.left; if (m.hint) z.hints.push(m.hint);
         renderHints(); renderMeta();
         root.classList.remove('shake'); void root.offsetWidth; root.classList.add('shake');
@@ -100,7 +112,7 @@ window.PuzzlePanel = (() => {
         if (!z || m.id !== z.id) return;
         clearInterval(timer); z = null;
         root.classList.add('shake');
-        $('#pzWin').hidden = false; $('#pzForm').hidden = true;
+        $('#pzWin').hidden = false; $('#pzForm').hidden = true; $('#pzMeta').hidden = true;
         $('#pzWin').innerHTML = `<p class="pz-fail">${m.reason === 'timeout' ? '⌛ Hết giờ giữ mã!' : '🔒 Hết lượt thử!'}</p>
           <p class="pz-cond">Mã đã trả lại kho. Gom lại ${svcName(m.svc)} để thử mật thư khác nhé.</p>
           <button type="button" class="btn ghost pz-close">Đóng</button>`;

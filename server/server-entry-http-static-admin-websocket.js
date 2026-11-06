@@ -15,6 +15,11 @@ const { WebSocketServer } = require('ws');
 const cfg = require('./live-config-schedule-services-and-limits');
 const { CodeStore } = require('./code-store-sqlite-atomic-issue-import-export');
 const { Hub } = require('./live-hub-sessions-players-stock-leaderboard');
+const { cleanNick, isBadNick } = require('./chat-moderation-filter-rate-limit-mute');
+
+// Lưới an toàn cuối: lỗi bất ngờ chỉ ghi log, KHÔNG thoát tiến trình (thoát = mọi sảnh + mật thư đang giải mất hết)
+process.on('uncaughtException', e => console.error('[uncaught]', e));
+process.on('unhandledRejection', e => console.error('[unhandled]', e));
 
 /* ---------- Đo hiệu năng (dev): PROFILE_SEC=60 → ghi CPU profile vào server/data/cpu-<time>.cpuprofile ---------- */
 if (process.env.PROFILE_SEC){
@@ -69,7 +74,8 @@ function send(res, code, body, type = 'application/json; charset=utf-8', extra =
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
 function clientIp(req){
-  if (cfg.trustProxy && req.headers['x-forwarded-for']) return String(req.headers['x-forwarded-for']).split(',')[0].trim();
+  // Nginx NỐI IP thật vào CUỐI X-Forwarded-For; phần đầu do trình duyệt tự khai được → lấy phần tử cuối
+  if (cfg.trustProxy && req.headers['x-forwarded-for']) return String(req.headers['x-forwarded-for']).split(',').pop().trim();
   return req.socket.remoteAddress || '';
 }
 function readBody(req, limit = 5 * 1024 * 1024){
@@ -90,7 +96,7 @@ function serveStatic(req, res, urlPath){
   let rel = decodeURIComponent(urlPath);
   if (rel.endsWith('/')) rel += 'index.html';
   const file = path.normalize(path.join(cfg.publicDir, rel));
-  if (!file.startsWith(cfg.publicDir)) return send(res, 403, { error:'forbidden' });
+  if (file !== cfg.publicDir && !file.startsWith(cfg.publicDir + path.sep)) return send(res, 403, { error:'forbidden' });
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) return send(res, 404, 'Không tìm thấy', 'text/plain; charset=utf-8');
     const ext = path.extname(file).toLowerCase();
@@ -172,7 +178,6 @@ async function verifyTurnstile(token, ip){
     return !!(await r.json()).success;
   } catch(e){ console.error('[turnstile]', e.message); return false; }
 }
-const cleanNick = s => String(s || '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 16);
 
 wss.on('connection', (ws, req, ip) => {
   connPerIp.set(ip, (connPerIp.get(ip) || 0) + 1);
@@ -184,7 +189,8 @@ wss.on('connection', (ws, req, ip) => {
   // Giới hạn tốc độ: cửa sổ 1 giây
   let winStart = Date.now(), msgs = 0, moves = 0, strikes = 0;
 
-  ws.on('message', async raw => {
+  ws.on('message', raw => onMessage(raw).catch(e => console.error('[ws]', e)));
+  async function onMessage(raw){
     const now = Date.now();
     if (now - winStart >= 1000){
       if (msgs > cfg.maxMsgPerSec) strikes++; else strikes = Math.max(0, strikes - 1);
@@ -202,6 +208,7 @@ wss.on('connection', (ws, req, ip) => {
       const avatar = typeof m.avatar === 'string' && /^[a-z0-9:|,]{1,80}$/.test(m.avatar) ? m.avatar : 'g:m|s:1|h:0|hc:0|t:polo|tc:0|a:none';
       if (!/^[A-Za-z0-9_-]{8,40}$/.test(pid)) return ws.close(4002, 'Mã thiết bị không hợp lệ');
       if (nick.length < 2) return ws.close(4003, 'Biệt danh cần 2–16 ký tự');
+      if (isBadNick(nick)) return ws.close(4005, 'Biệt danh không phù hợp');   // hiện công khai trên bảng xếp hạng
       if (!(await verifyTurnstile(m.ts, ip))) return ws.close(4004, 'Xác minh chống bot không thành công');
       if (ws.readyState !== 1) return;
       clearTimeout(helloTimer);
@@ -222,7 +229,7 @@ wss.on('connection', (ws, req, ip) => {
     } else if (m.t === 'ans'){
       if (typeof m.id === 'string' && typeof m.a === 'string' && m.a.length <= 80) hub.answer(player, m.id, m.a);
     }
-  });
+  }
   ws.on('close', () => {
     clearTimeout(helloTimer);
     const n = (connPerIp.get(ip) || 1) - 1; n ? connPerIp.set(ip, n) : connPerIp.delete(ip);

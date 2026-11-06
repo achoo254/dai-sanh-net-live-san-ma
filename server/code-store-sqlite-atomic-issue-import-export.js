@@ -99,7 +99,8 @@ class CodeStore {
   confirm(code, { pid, nick, session, day }){
     return this.q.confirm.get(pid, nick, session, day, Date.now(), code, pid) || null;
   }
-  release(code, pid){ this.q.release.run(code, pid); }
+  /** Trả mã đang giữ về kho. Trả về true nếu thật sự có mã được nhả (để không cộng tồn kho 2 lần). */
+  release(code, pid){ return this.q.release.run(code, pid).changes > 0; }
   countDayService(pid, service, day){ return this.q.countDayService.get(pid, service, day).n; }
   countSession(pid, session){ return this.q.countSession.get(pid, session).n; }
   myCodes(pid, session){ return this.q.mine.all(pid, session); }
@@ -161,15 +162,26 @@ class CodeStore {
   }
 
   /* ---------- Ngân hàng mật thư ---------- */
-  seedSamplePuzzles(kit){
-    if (this.q.pzCount.get().n > 0) return 0;
-    let n = 0; const now = Date.now();
+  /** Đồng bộ đề MẪU (source='sample') với bank chỉ-trên-máy-chủ. Đề mẫu cũ (từng lộ đáp án trong file trình duyệt)
+   *  được thay hết; nếu MKT đã "thay đề mẫu" (mẫu đang tắt) thì đề mẫu mới cũng để tắt. Không đụng đề MKT. */
+  syncSamplePuzzles(bank){
+    const rows = this.db.prepare(`SELECT question, active FROM puzzles WHERE source = 'sample'`).all();
+    const want = [...bank.FILL, ...bank.CLUES].map(x => x.question).sort();
+    if (rows.length === want.length && rows.map(r => r.question).sort().every((q, i) => q === want[i])) return 0;
+    const active = rows.length ? (rows.some(r => r.active) ? 1 : 0) : 1;
+    const now = Date.now(); let n = 0;
     this.db.exec('BEGIN');
-    for (const f of kit.SAMPLE_FILL){ this.q.pzInsert.run(1, 'fill', f.question, f.answers.join('|'), f.hint1, f.hint2, '[]', 'sample', now); n++; }
-    for (const c of kit.SAMPLE_CLUES){ this.q.pzInsert.run(3, 'clues', c.question, c.answers.join('|'), c.hint1, c.hint2, JSON.stringify(c.clues), 'sample', now); n++; }
-    this.db.exec('COMMIT');
+    try {
+      this.db.prepare(`DELETE FROM puzzles WHERE source = 'sample'`).run();
+      const ins = this.db.prepare(`INSERT INTO puzzles(tier, type, question, answers, hint1, hint2, clues, source, active, created_at) VALUES(?,?,?,?,?,?,?,'sample',?,?)`);
+      for (const f of bank.FILL){ ins.run(1, 'fill', f.question, f.answers.join('|'), f.hint1, f.hint2, '[]', active, now); n++; }
+      for (const c of bank.CLUES){ ins.run(3, 'clues', c.question, c.answers.join('|'), c.hint1, c.hint2, JSON.stringify(c.clues), active, now); n++; }
+      this.db.exec('COMMIT');
+    } catch(e){ this.db.exec('ROLLBACK'); throw e; }
     return n;
   }
+  /** Số đề MKT (không phải đề mẫu) đang bật theo cấp — để cảnh báo khi chạy thật mà chưa nạp đề. */
+  mktPuzzleCount(tier){ return this.db.prepare(`SELECT COUNT(*) n FROM puzzles WHERE tier = ? AND active = 1 AND source <> 'sample'`).get(tier).n; }
   bankCount(tier){ return this.q.pzCountTier.get(tier).n; }
   randomPuzzle(tier){
     const r = this.q.pzRandom.get(tier);
@@ -226,7 +238,8 @@ class CodeStore {
 }
 
 function csvCell(v){
-  const s = v == null ? '' : String(v);
+  let s = v == null ? '' : String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;   // chống "CSV injection": biệt danh =HYPERLINK(...) không chạy thành công thức Excel
   return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 /** Bộ đọc CSV tối giản, hỗ trợ ô có ngoặc kép. */

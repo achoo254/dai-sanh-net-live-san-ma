@@ -4,7 +4,7 @@
  * - Hộp quà rơi quanh quầy dịch vụ, Siêu Deal ở bục giữa, khiên ngẫu nhiên; ai ĐI TỚI trước thì nhặt
  *   (thứ tự = thứ tự máy chủ nhận vị trí, đơn luồng → công bằng)
  * - Bọ DDoS đi lang thang, đụng phải bị đơ
- * - Ảnh chụp vị trí gửi 6 lần/giây, chỉ gồm người vừa di chuyển
+ * - Ảnh chụp vị trí ~4 lần/giây theo vùng quan tâm (người/virus ở gần), ~2,7 giây gửi toàn bộ 1 lần
  * ============================================================================= */
 'use strict';
 const WR = require('../public/assets/world-map-rules-shared.js');
@@ -13,7 +13,7 @@ const SERVICES = ['domain', 'hosting', 'vps', 'ssl', 'email'];
 const TICK_MS = 66, SNAP_EVERY = 4;            // 15 nhịp/giây, gửi ảnh chụp mỗi 4 nhịp (~3,75 lần/giây; trình duyệt nội suy cho mượt)
 // Quỹ quãng đường dự phòng (giây đi bộ). Phải NHỎ: quỹ này đầy lên khi đứng chờ, kẻ gian lận dùng nó "nhảy" lên trước
 // lúc hộp vừa rơi (đo được: quỹ 0,3s → bot gian lận thắng 89% cuộc đua 1 suất). 0,15s ≈ 42 đơn vị, chỉ hơn 1 gói vị trí.
-const BURST_SEC = 0.15;            // 15 nhịp/giây, gửi ảnh chụp mỗi 3 nhịp (~5–6 lần/giây)
+const BURST_SEC = 0.15;
 const lerp = (a, b, t) => a + (b - a) * t;
 const r1 = v => Math.round(v);
 
@@ -25,7 +25,8 @@ class Room {
     this.seq = 0; this.ridSeq = 0; this.tickN = 0;
     this.timers = []; this.live = null; this.shieldSpawns = 0;
     this.chatLog = [];                            // 60 tin gần nhất của sảnh (gửi cho người mới vào)
-    this.loop = setInterval(() => this.tick(), TICK_MS);
+    // Lỗi trong 1 nhịp chỉ ghi log, sảnh vẫn chạy tiếp (không làm sập cả máy chủ)
+    this.loop = setInterval(() => { try { this.tick(); } catch(e){ console.error(`[room ${this.id}]`, e); } }, TICK_MS);
   }
   get size(){ return this.members.size; }
   destroy(){ this.stopLive(); clearInterval(this.loop); }
@@ -97,7 +98,7 @@ class Room {
     if (this.drops.size || this.bugs.length) this.broadcast({ t:'clear' });
     this.drops.clear(); this.bugs = []; this.live = null;
   }
-  later(ms, fn){ const t = setTimeout(fn, ms); this.timers.push(t); return t; }
+  later(ms, fn){ const t = setTimeout(() => { try { fn(); } catch(e){ console.error(`[room ${this.id}]`, e); } }, ms); this.timers.push(t); return t; }
   progress(){ return this.live ? Math.min(1, Math.max(0, (Date.now() - this.live.start) / (this.live.end - this.live.start))) : 0; }
   scheduleNext(ms){
     this.later(ms, () => {
@@ -134,8 +135,10 @@ class Room {
     const left = (this.hub.stockOf('super') || {}).free || 0;
     if (left <= 0){ this.broadcast({ t:'feed', items:['Kho Siêu Deal đã hết, săn hộp thường tiếp nhé!'] }); return; }
     const a = Math.random() * 6.28, d = Math.random() * 60;
+    // Mọi sảnh dùng chung kho → chia đều số mã Siêu Deal còn lại cho các sảnh đang có người (tránh 7 sảnh × 5 suất > kho)
+    const rooms = Math.max(1, this.hub.rooms.filter(r => r.size).length);
     this.addDrop({ kind:'super', svc:'super', x: WR.STAGE.x + Math.cos(a) * d, y: WR.STAGE.y + Math.sin(a) * d * .6,
-                   slots: Math.min(this.cfg.superSlotsPerDrop, left), ttl: this.cfg.superTtlMs });
+                   slots: Math.max(1, Math.min(this.cfg.superSlotsPerDrop, Math.ceil(left / rooms))), ttl: this.cfg.superTtlMs });
   }
   addDrop({ kind, svc, x, y, slots, ttl }){
     const id = `${this.id}.${++this.seq}`;
@@ -158,6 +161,14 @@ class Room {
     if (now > d.until || d.takers.has(p.pid) || p.stunUntil > now) return;
     if (WR.dist2(p, d) > WR.PICK_R ** 2) return;
     if (d.takers.size >= d.slots) return;
+    // Siêu Deal: người không thể nhận mã (đang giải đề khác / đã nhận Siêu Deal hôm nay) không được chiếm suất của người khác
+    if (d.kind === 'super'){
+      const why = p.puzzle ? 'busy' : this.hub.limitReason(p, 'super');
+      if (why){
+        if (!(d.refused = d.refused || new Set()).has(p.pid)){ d.refused.add(p.pid); p.reply({ t:'blocked', svc:'super', reason: why }); }
+        return;
+      }
+    }
     d.takers.add(p.pid);
     const left = d.slots - d.takers.size;
     let res;
@@ -192,13 +203,17 @@ class Room {
     }
     if (this.tickN % SNAP_EVERY) return;
     // Mỗi mục được đóng gói thành chuỗi MỘT LẦN; ảnh chụp cho từng người chỉ là ghép chuỗi (không JSON.stringify lại)
+    // Sảnh nhỏ: gửi mọi người vừa đi. Sảnh đông: ~2,7 giây/lần gửi vị trí của TẤT CẢ (cả người đã dừng) để người
+    // ngoài vùng quan tâm không bị "đứng hình" ở chỗ cũ; các nhịp còn lại chỉ gửi người/virus ở gần.
+    const small = this.size <= 40, full = small || this.tickN % (SNAP_EVERY * 10) === 0;
     const moved = [], bugs = [];
-    for (const p of this.members) if (p.moved){ p.moved = false; moved.push({ s:`[${p.rid},${r1(p.x)},${r1(p.y)}]`, x:p.x, y:p.y }); }
+    for (const p of this.members){
+      if (!p.moved && (small || !full)) continue;
+      p.moved = false; moved.push({ s:`[${p.rid},${r1(p.x)},${r1(p.y)}]`, x:p.x, y:p.y });
+    }
     if (this.live) for (const b of this.bugs) bugs.push({ s:`[${b.id},${r1(b.x)},${r1(b.y)}]`, x:b.x, y:b.y });
     if (!moved.length && !bugs.length) return;
     const pack = (pm, pb) => `{"t":"snap","p":[${pm.join(',')}]${pb.length ? `,"b":[${pb.join(',')}]` : ''}}`;
-    // Sảnh nhỏ hoặc ~2 giây/lần: gửi tất cả (để bản đồ nhỏ và người ở xa không lệch quá lâu)
-    const full = this.size <= 40 || this.tickN % (SNAP_EVERY * 10) === 0;
     if (full){
       const s = pack(moved.map(m => m.s), bugs.map(b => b.s));
       for (const p of this.members) p.sendRaw(s);

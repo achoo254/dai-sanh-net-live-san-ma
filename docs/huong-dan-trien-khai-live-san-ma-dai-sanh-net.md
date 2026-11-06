@@ -135,6 +135,8 @@ Nâng giới hạn kết nối hệ điều hành: `worker_connections 20000;` t
 ## 6. Trước ngày chạy (bắt buộc)
 
 1. **Nạp kho mã thật** ở `admin.html` (CSV: `service,code,offer,cond,expires,url,pool`), kiểm tra bảng kho.
+1. **Nạp đề mật thư của MKT và tick "Tắt đề mẫu khi nạp"** (bắt buộc: đề mẫu nằm trong repo công khai nên ai cũng xem được đáp án). Máy chủ in cảnh báo khi chạy thật mà chưa có đề MKT cấp 1 và cấp 3.
+1. **Bật Turnstile** (`TURNSTILE_SITEKEY` + `TURNSTILE_SECRET`). Không bật thì mọi giới hạn mã chỉ tính theo thiết bị, bot mở nhiều thiết bị ảo là lách được. Máy chủ in cảnh báo khi thiếu.
 2. **Load test trên chính máy chủ thật**, bot chạy từ **máy khác** (không chạy chung máy):
    `node server/load-test-simulate-many-players-websocket.js 1000 wss://sandeal.22.id.vn/ws`
    Đạt khi: không mã trùng, không ai vượt giới hạn, độ trễ p95 < 300 ms. Trong lúc chạy, xem "Trễ vòng lặp p99" ở trang quản trị (< 50 ms là khoẻ).
@@ -147,15 +149,29 @@ Nâng giới hạn kết nối hệ điều hành: `worker_connections 20000;` t
 2. Vào `admin.html` → mục **Mật thư** → chọn file → (tuỳ chọn) tick "Tắt đề mẫu khi nạp" → **Nạp đề**. Dòng lỗi được báo rõ (cấp sai, thiếu đáp án, điểm manh mối không tồn tại).
 3. Bấm **Xem thống kê** sau mỗi phiên: số lượt mở, giải đúng, sai/hết giờ, thời gian giải trung bình của từng đề → chỉnh độ khó.
 4. Quy tắc: đáp án chỉ nằm trên máy chủ; chấm không phân biệt hoa/thường, có dấu/không dấu, khoảng trắng; mã được giữ 90 giây khi đang giải; sai 3 lần hoặc hết giờ → mã trả lại kho, dịch vụ đó về 0 mảnh.
+   Cấp 3: **phải đi đọc đủ manh mối** mới được trả lời (trả lời sớm không bị trừ lượt, chỉ nhắc đi tìm).
+   Đề mẫu bản live ở `server/puzzle-sample-bank-server-only.js` (không gửi xuống trình duyệt); bản luyện tay dùng bộ đề riêng trong `puzzle-cipher-generator-shared.js`.
 5. Điểm giấu manh mối cấp 3: `pantry` (bảng ghim pantry), `server` (vách kính phòng máy chủ), `reception` (quầy lễ tân), `meeting` (cửa phòng họp OneShield), `lounge` (góc sofa), `atrium` (dưới màn LED).
 
 ## 6b2. Chat trong văn phòng
 
-- Chat theo **sảnh** (≤100 người cùng sảnh thấy nhau): khung chat (máy tính ghim góc trái, bấm **Enter** để gõ; điện thoại mở bằng nút 💬) + **bong bóng lời nhắn trên đầu nhân vật** 5 giây.
+- Chat theo **sảnh** (≤150 người cùng sảnh thấy nhau): khung chat (máy tính mở sẵn góc trái, thu gọn bằng ×, bấm **Enter** để gõ; điện thoại mở bằng nút 💬) + **bong bóng lời nhắn trên đầu nhân vật** 5 giây.
 - Kiểm duyệt tự động (`server/chat-moderation-filter-rate-limit-mute.js`): che từ thô tục tiếng Việt/Anh (cả kiểu viết tách chữ, không dấu, lặp chữ), **chặn link và số điện thoại** (chống lừa đảo), tối đa 1 tin/1,5 giây và 6 tin/20 giây, chặn tin lặp. Danh sách từ cấm sửa trực tiếp trong file này.
-- Người chơi bấm ⚑ để báo cáo; tin bị **3 người khác nhau** báo cáo → ẩn tin đó + khoá chat người gửi 10 phút.
+- Người chơi bấm ⚑ để báo cáo; tin bị **3 người khác nhau, từ ít nhất 2 mạng khác nhau** báo cáo → ẩn tin đó + khoá chat người gửi 10 phút (chặn kiểu mở 3 tab tự báo cáo để khoá người khác).
+- Lọc theo **nguyên từ**: "lồng đèn", "Dickson", "du mạch" không bị che nhầm; vẫn bắt kiểu kéo dài chữ (đụuuu), chèn dấu chấm (đ.m), ký tự vô hình. **Biệt danh** có từ thô tục / link / số điện thoại bị từ chối ngay lúc vào.
 - Trang quản trị → mục **Chat văn phòng**: xem 200 tin gần nhất (cả tin đã ẩn), số lượt báo cáo, bấm **Khoá 24h** (ẩn mọi tin gần đây của người đó). Danh sách khoá lưu SQLite, khởi động lại vẫn giữ.
 - Nên có người trực kiểm duyệt trong giờ live.
+
+## 6b3. Rà soát logic + giao diện (06/11/2026)
+
+Đã sửa sau khi rà toàn bộ mã máy chủ và chơi thử cả luồng:
+- **Mã giữ chỗ**: sang phiên mới khi người chơi đang giải dở → nhả mã về kho ngay; chỉ cộng tồn kho khi thật sự nhả được; tồn kho đối chiếu với SQLite mỗi 5 giây.
+- **Người rớt mạng**: hết giờ mật thư lúc đang rớt mạng thì không mở đề kế (không giữ mã cho người vắng); vào lại mới mở.
+- **Siêu Deal**: người đang giải đề khác hoặc đã nhận Siêu Deal hôm nay không chiếm suất của người khác; số suất mỗi sảnh chia đều theo kho còn lại.
+- **Vị trí người ở xa**: sảnh đông, ~2,7 giây gửi vị trí tất cả 1 lần (trước đây người đứng yên ngoài vùng nhìn bị "đứng hình" sai chỗ).
+- **Chống sập**: lỗi trong 1 nhịp sảnh / 1 tin nhắn chỉ ghi log, không làm sập máy chủ. Dọn bộ nhớ người rời >15 phút, sảnh phụ trống >60 giây.
+- **Bảo mật nhỏ**: IP thật lấy phần tử cuối X-Forwarded-For (Nginx nối vào cuối); file CSV xuất ra chống chèn công thức Excel; chặn đường dẫn tĩnh chuẩn hơn.
+- **Giao diện**: mũi tên ở mép màn hình chỉ 3 hộp quà gần nhất (ưu tiên dịch vụ còn thiếu), Siêu Deal và manh mối; quầy lễ tân dời sang phải → từ cửa nhìn thẳng thảm xanh tới bục Siêu Deal; màn vào game 2 cột trên máy tính (không phải cuộn); bảng chờ phiên dời lên trên không che nhân vật; biểu cảm gom vào 1 nút; chat thu gọn được; mật thư hiện số giây còn giữ mã; "Sảnh S1" → "Sảnh 1"; sửa chữ "Top 10" bị cắt ở màn kết quả.
 
 ## 6c. Hiệu năng bản 3D (đo 05/11/2026, laptop Intel UHD 620)
 

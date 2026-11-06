@@ -45,8 +45,9 @@
   });
   OBSTACLES.push(
     { x: 1600, y: WALL_Y, w: 800, h: 280, kind:'serverroom', id:'vps' },
-    { x: 1860, y: 2330,   w: 280, h: 64,  kind:'reception' },
-    { x: 1830, y: 2250,   w: 340, h: 24,  kind:'logowall' },
+    // Lễ tân + tường logo đặt lệch phải lối vào → từ cửa nhìn thẳng thảm xanh tới bục Siêu Deal
+    { x: 2280, y: 2330,   w: 280, h: 64,  kind:'reception' },
+    { x: 2250, y: 2250,   w: 340, h: 24,  kind:'logowall' },
     { x: 700,  y: 800,    w: 300, h: 130, kind:'desks' }, { x: 1250, y: 800,  w: 300, h: 130, kind:'desks' },
     { x: 2450, y: 800,    w: 300, h: 130, kind:'desks' }, { x: 3000, y: 800,  w: 300, h: 130, kind:'desks' },
     { x: 1050, y: 1750,   w: 300, h: 130, kind:'desks' }, { x: 2650, y: 1750, w: 300, h: 130, kind:'desks' },
@@ -60,7 +61,7 @@
     { x: 1600, y: 1600,   w: 44,  h: 44,  kind:'pillar' }, { x: 2356, y: 1600, w: 44, h: 44, kind:'pillar' },
     { x: 90,   y: 170,    w: 80,  h: 70,  kind:'plant' },  { x: 3830, y: 170,  w: 80, h: 70, kind:'plant' },
     { x: 90,   y: 1200,   w: 80,  h: 70,  kind:'plant' },  { x: 3830, y: 1200, w: 80, h: 70, kind:'plant' },
-    { x: 1500, y: 2440,   w: 70,  h: 70,  kind:'plant' },  { x: 2440, y: 2440, w: 70, h: 70, kind:'plant' },
+    { x: 1500, y: 2440,   w: 70,  h: 70,  kind:'plant' },  { x: 2620, y: 2440, w: 70, h: 70, kind:'plant' },
     { x: 1150, y: 1100,   w: 60,  h: 60,  kind:'plant' },  { x: 2800, y: 1100, w: 60, h: 60, kind:'plant' }
   );
 
@@ -68,7 +69,7 @@
   const CLUE_SPOTS = {
     pantry:    { x: 1220, y: 2380, name:'Bảng ghim Pantry' },
     server:    { x: 2000, y: 480,  name:'Vách kính phòng máy chủ' },
-    reception: { x: 1960, y: 2290, name:'Quầy lễ tân' },
+    reception: { x: 2330, y: 2450, name:'Quầy lễ tân' },
     meeting:   { x: 3050, y: 2200, name:'Cửa phòng họp OneShield' },
     lounge:    { x: 760,  y: 2000, name:'Góc sofa thư giãn' },
     atrium:    { x: 2000, y: 1040, name:'Dưới màn LED atrium' }

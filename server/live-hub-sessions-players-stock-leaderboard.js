@@ -12,7 +12,10 @@ const { Room } = require('./live-room-world-movement-drops-bugs');
 const { phaseAt } = require('./session-schedule-phase-calculator');
 const WR = require('../public/assets/world-map-rules-shared.js');
 const PuzzleKit = require('../public/assets/puzzle-cipher-generator-shared.js');
+const SampleBank = require('./puzzle-sample-bank-server-only');
 const { ChatModerator } = require('./chat-moderation-filter-rate-limit-mute');
+const PLAYER_IDLE_PRUNE_MS = 15 * 60e3;     // người rời mạng quá 15 phút → bỏ khỏi bộ nhớ (tiến độ đã lưu SQLite)
+const ROOM_EMPTY_PRUNE_MS = 60e3;           // sảnh phụ trống quá 60 giây → dừng vòng lặp, giải phóng
 
 const vnDay = ts => new Date(ts + 7 * 3600e3).toISOString().slice(0, 10);
 
@@ -44,7 +47,12 @@ class Hub {
     // CHỈ dùng khi load test ở chế độ chạy thử: gửi kèm đáp án để bot giải được (không bao giờ bật khi chạy thật)
     this.revealAnswers = cfg.demoLoop && process.env.LOADTEST_REVEAL_ANSWERS === '1';
     if (this.revealAnswers) console.warn('[CẢNH BÁO] LOADTEST_REVEAL_ANSWERS=1: đáp án mật thư được gửi kèm (chỉ để load test)!');
-    store.seedSamplePuzzles(PuzzleKit);
+    const synced = store.syncSamplePuzzles(SampleBank);
+    if (synced) console.log(`[mật thư] Đã nạp ${synced} đề MẪU chỉ-trên-máy-chủ (thay đề mẫu cũ).`);
+    if (!cfg.demoLoop && (!store.mktPuzzleCount(3) || !store.mktPuzzleCount(1)))
+      console.warn('[CẢNH BÁO] Chưa có đề mật thư của MKT (cấp 1 và cấp 3). Đề mẫu nằm trong repo công khai → nạp đề thật ở /admin.html và tick "thay đề mẫu" trước ngày chạy.');
+    if (!cfg.demoLoop && !cfg.turnstileSecret)
+      console.warn('[CẢNH BÁO] Chưa bật Turnstile: mọi giới hạn mã tính theo thiết bị, bot có thể mở nhiều thiết bị ảo. Đặt TURNSTILE_SITEKEY + TURNSTILE_SECRET khi chạy thật.');
     this.mod = new ChatModerator(store);
     this.chatSeq = 0; this.chatRecent = [];        // 500 tin gần nhất toàn hệ thống (cho quản trị)
     this.players = new Map();     // pid → Player (giữ cả người tạm rớt mạng trong phiên)
@@ -62,13 +70,30 @@ class Hub {
     const st = phaseAt(Date.now(), this.cfg);
     this.refreshStock((st.session || st.next || {}).id || '');
     this.tick();
+    // Mỗi việc định kỳ bọc try/catch: 1 lỗi (vd. SQLite bận/đĩa đầy) chỉ ghi log, không làm sập cả máy chủ
+    const every = (ms, fn, name) => setInterval(() => { try { fn(); } catch(e){ console.error(`[hub:${name}]`, e); } }, ms);
     this.timers = [
-      setInterval(() => this.tick(), 250),
-      setInterval(() => this.flushProgress(), 1000),
-      setInterval(() => this.broadcastBoard(), 1000),
-      setInterval(() => this.broadcastPresence(), 2000),
-      setInterval(() => this.flushFeed(), 600)
+      every(250, () => this.tick(), 'tick'),
+      every(1000, () => this.flushProgress(), 'progress'),
+      every(1000, () => this.broadcastBoard(), 'board'),
+      every(2000, () => this.broadcastPresence(), 'presence'),
+      every(600, () => this.flushFeed(), 'feed'),
+      every(30000, () => this.prune(), 'prune'),
+      every(5000, () => this.refreshStock(), 'stock')        // đối chiếu tồn kho với SQLite (mã giữ chỗ tự hết hạn…)
     ];
+  }
+  /** Dọn bộ nhớ: người rời mạng lâu, sảnh phụ trống, bộ đếm chat cũ. */
+  prune(){
+    const now = Date.now();
+    for (const p of this.players.values())
+      if (!p.ws && !p.puzzle && !p.dirty && now - (p.leftAt || 0) > PLAYER_IDLE_PRUNE_MS) this.players.delete(p.pid);
+    this.rooms = this.rooms.filter((r, i) => {
+      if (r.size) { r.emptySince = 0; return true; }
+      r.emptySince = r.emptySince || now;
+      if (i === 0 || now - r.emptySince < ROOM_EMPTY_PRUNE_MS) return true;
+      r.destroy(); return false;
+    });
+    this.mod.pruneRate(now);
   }
   stop(){ (this.timers || []).forEach(clearInterval); this.rooms.forEach(r => r.destroy()); this.flushProgress(); }
 
@@ -92,6 +117,7 @@ class Hub {
   newSession(session){
     this.flushProgress();
     for (const p of this.players.values()){
+      this.dropPuzzle(p);                                   // đang giải dở mật thư phiên cũ → nhả mã về kho ngay
       if (!p.ws){ this.players.delete(p.pid); continue; }   // dọn người đã rời
       p.resetSession(session.id);
     }
@@ -123,6 +149,7 @@ class Hub {
     p.nick = nick; p.avatar = avatar; p.ws = ws; p.ip = ip;
     const sid = this.sessionId();
     if (sid && p.session !== sid){
+      this.dropPuzzle(p);
       p.resetSession(sid);
       // Máy chủ vừa khởi động lại giữa phiên → nạp lại tiến độ + mã đã nhận
       const saved = this.store.loadProgress(sid, pid);
@@ -146,11 +173,12 @@ class Hub {
     p.reply(this.phaseMsg());
     if (this.lastTop) p.sendRaw(this.lastTop);
     if (p.puzzle) this.sendPuzzle(p);            // vào lại giữa lúc giải mật thư → mở lại đúng đề, đúng giờ còn lại
+    else if (p.pendingUnlock.size) this.afterPuzzle(p);   // đủ mảnh lúc đang rớt mạng → mở mật thư chờ
     return p;
   }
   leave(p, ws){
     if (p.ws !== ws) return;             // kết nối cũ đã bị thay thế
-    p.ws = null;
+    p.ws = null; p.leftAt = Date.now();
     if (p.room) p.room.remove(p);
     p.dirty = true;
   }
@@ -208,7 +236,8 @@ class Hub {
     // Cấp 3 luôn lấy từ ngân hàng (cần manh mối); cấp 1–2 trộn đề MKT (60%) với đề tự sinh (mỗi người một đề)
     const fromBank = tier >= 3 || (this.store.bankCount(tier) > 0 && Math.random() < 0.6);
     if (fromBank){ const q = this.store.randomPuzzle(tier); if (q) return q; }
-    const g = this.kit.generate(tier);
+    // Đề tự sinh dùng ngân hàng chỉ-trên-máy-chủ, KHÔNG dùng đề luyện tay (đề luyện tay ai cũng đọc được trong trình duyệt)
+    const g = this.kit.generate(tier, Math.random, { fill: SampleBank.FILL, clues: SampleBank.CLUES });
     return Object.assign({ key:'gen:' + g.type }, g);
   }
   openPuzzle(p, svc){
@@ -253,6 +282,9 @@ class Hub {
     if (!z || z.id !== id || typeof text !== 'string') return;
     if (now - (p.lastAns || 0) < 1200) return p.reply({ t:'ans_r', id, ok:false, slow:true });   // chống dò đáp án bằng máy
     p.lastAns = now;
+    // Cấp 3: phải đi tới đọc ĐỦ manh mối mới được trả lời (không tốn lượt thử) — chặn "biết đáp án, khỏi đi"
+    if (z.clues.length && z.found.size < z.clues.length)
+      return p.reply({ t:'ans_r', id, ok:false, needClues: z.clues.length - z.found.size });
     if (this.kit.check(z.answers, text.slice(0, 80))){
       const day = vnDay(this.state.session ? this.state.session.start : now);
       const code = this.store.confirm(z.code, { pid:p.pid, nick:p.nick, session:this.sessionId(), day });
@@ -275,16 +307,23 @@ class Hub {
   endPuzzle(p, reason){
     const z = p.puzzle; if (!z) return;
     this.clearPuzzle(p);
-    this.store.release(z.code, p.pid);
-    this.bumpStock(z.svc, +1);
+    if (this.store.release(z.code, p.pid)) this.bumpStock(z.svc, +1);   // chỉ cộng kho khi thật sự nhả được mã
     this.store.statResult(z.key, false, 0);
     if (z.svc !== 'super') p.pieces[z.svc] = 0;
     p.dirty = true;
     p.reply({ t:'puzzle_end', id:z.id, reason, svc:z.svc, pieces:p.pieces });
     this.afterPuzzle(p);
   }
+  /** Bỏ mật thư đang dở (đổi phiên / dọn người): nhả mã giữ chỗ, không báo người chơi, không mở đề tiếp. */
+  dropPuzzle(p){
+    const z = p.puzzle; if (!z) return;
+    this.clearPuzzle(p);
+    if (this.store.release(z.code, p.pid)) this.bumpStock(z.svc, +1);
+  }
   clearPuzzle(p){ if (p.puzzle){ clearTimeout(p.puzzle.timer); p.puzzle = null; } }
   afterPuzzle(p){
+    // Người đã bị dọn khỏi bộ nhớ hoặc đang rớt mạng → không giữ mã cho người không ai nghe (mở lại khi họ vào lại)
+    if (this.players.get(p.pid) !== p || !p.ws) return;
     for (const svc of p.pendingUnlock){
       p.pendingUnlock.delete(svc);
       if (!p.claimed.has(svc) && (p.pieces[svc] || 0) >= this.cfg.piecesToUnlock && this.state.session){
@@ -312,9 +351,10 @@ class Hub {
     const room = p.room; if (!room) return;
     const msg = room.chatLog.find(c => c.id === id);
     if (!msg || msg.pid === p.pid || msg.hidden) return;
-    msg.reports.add(p.pid);
+    msg.reports.add(p.pid); (msg.reportIps = msg.reportIps || new Set()).add(p.ip);
     p.reply({ t:'chat_err', m:'Đã báo cáo tin nhắn. Cảm ơn em!', soft:true });
-    if (msg.reports.size >= 3) this.hideAndMute(msg.pid, 10 * 60e3, 'Bị 3 người báo cáo', msg.nick, msg.id);
+    // ≥3 người VÀ ≥2 địa chỉ mạng khác nhau → khó "hội đồng" khoá chat người khác bằng nhiều tab cùng 1 máy
+    if (msg.reports.size >= 3 && msg.reportIps.size >= 2) this.hideAndMute(msg.pid, 10 * 60e3, 'Bị 3 người báo cáo', msg.nick, msg.id);
   }
   /** Khoá chat 1 người. onlyId: chỉ ẩn tin bị báo cáo (khoá tự động); bỏ trống: ẩn mọi tin gần đây (quản trị khoá). */
   hideAndMute(pid, ms, reason, nick, onlyId){
@@ -331,7 +371,11 @@ class Hub {
   }
 
   /* ---------- Tồn kho ---------- */
-  refreshStock(sessionId){ this.stock = this.store.stock(sessionId || this.sessionId()); this.stockDirty = true; }
+  refreshStock(sessionId){
+    const sid = sessionId || this.sessionId() || (this.state.next || {}).id || '';
+    const st = this.store.stock(sid), changed = JSON.stringify(st) !== JSON.stringify(this.stock);
+    this.stock = st; if (changed) this.stockDirty = true;          // chỉ phát lại khi tồn kho thật sự đổi
+  }
   setStockFree(svc, n){ if (this.stock[svc]) { this.stock[svc].free = n; this.stockDirty = true; } }
   bumpStock(svc, d){ const st = this.stock[svc]; if (st){ st.free = Math.max(0, st.free + d); this.stockDirty = true; } }
   stockOf(svc){ return this.stock[svc]; }

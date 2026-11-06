@@ -4,7 +4,9 @@
  * Cấp 2 (vừa): dịch chữ cái (Caesar, có nói số bước), số → chữ (A=1…Z=26)
  * Cấp 3 (khó hơn chút): ghép 2 manh mối giấu ở các điểm trong văn phòng 3D
  * Đề tự sinh chọn ngẫu nhiên từ danh sách từ khoá dịch vụ iNET → mỗi người một đề, khó "xin đáp án".
- * ĐỀ MẪU bên dưới chỉ để chạy thử; MKT nạp đề thật qua trang quản trị (đáp án chỉ nằm trên máy chủ).
+ * ĐỀ LUYỆN TAY bên dưới chỉ dùng cho bản luyện tay (file này tải xuống trình duyệt → ai cũng đọc được).
+ * Bản live KHÔNG dùng các đề này: máy chủ truyền ngân hàng đề riêng (server/puzzle-sample-bank-server-only.js
+ * hoặc đề MKT nạp ở trang quản trị) vào generate(tier, rand, bank).
  * ============================================================================= */
 (function (root, factory){
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -34,8 +36,8 @@
     { w:'BLACKFRIDAY', show:'BLACK FRIDAY', hint:'Mùa săn deal cuối tháng 11' }
   ];
 
-  // Đề mẫu cấp 1 (điền khuyết)
-  const SAMPLE_FILL = [
+  // Đề LUYỆN TAY cấp 1 (điền khuyết)
+  const PRACTICE_FILL = [
     { question:'Điền vào chỗ trống: "Chứng chỉ ___ giúp website hiện ổ khóa và chạy https."', answers:['SSL'], hint1:'Viết tắt 3 chữ cái', hint2:'Bắt đầu bằng chữ S' },
     { question:'Điền vào chỗ trống: "Muốn có địa chỉ như inet.vn, bạn cần đăng ký một ___."', answers:['TEN MIEN', 'DOMAIN'], hint1:'Địa chỉ của website', hint2:'T _ N   M _ _ N' },
     { question:'Điền vào chỗ trống: "Website cần một nơi để đặt dữ liệu, gọi là ___."', answers:['HOSTING'], hint1:'Thuê "nhà" cho website', hint2:'Bắt đầu bằng chữ H' },
@@ -43,8 +45,8 @@
     { question:'Điền vào chỗ trống: "Hộp thư theo tên miền riêng gọi là ___ doanh nghiệp."', answers:['EMAIL'], hint1:'Thư điện tử', hint2:'E _ _ _ L' },
     { question:'Điền vào chỗ trống: "Bảng điều khiển hosting của iNET tên là One___."', answers:['PANEL', 'ONEPANEL'], hint1:'Bảng điều khiển (tiếng Anh)', hint2:'P _ _ _ L' }
   ];
-  // Đề mẫu cấp 3 (ghép manh mối ở các điểm trong văn phòng: pantry, server, reception, meeting, lounge, atrium)
-  const SAMPLE_CLUES = [
+  // Đề LUYỆN TAY cấp 3 (ghép manh mối ở các điểm trong văn phòng: pantry, server, reception, meeting, lounge, atrium)
+  const PRACTICE_CLUES = [
     { question:'Ghép [Mảnh 1][Mảnh 2] (viết liền, không dấu chấm). Ví dụ: 80COM', answers:['443IDVN'],
       clues:[{ spot:'server', text:'Mảnh 1: số cổng mặc định của HTTPS' }, { spot:'pantry', text:'Mảnh 2: đuôi tên miền dành cho cá nhân của Việt Nam' }],
       hint1:'Mảnh 2 có dạng .__.vn', hint2:'Mảnh 1 là 3 chữ số, bắt đầu bằng 4' },
@@ -76,16 +78,19 @@
   }
   const caesar = (w, k) => w.replace(/[A-Z]/g, c => String.fromCharCode((c.charCodeAt(0) - 65 + k) % 26 + 65));
 
-  /** Sinh 1 đề theo cấp. Trả về { type, question, answers[], hint1, hint2, clues? } */
-  function generate(tier, rand = Math.random){
-    if (tier >= 3) return Object.assign({ type:'clues' }, JSON.parse(JSON.stringify(pick(SAMPLE_CLUES, rand))));
+  /** Sinh 1 đề theo cấp. bank = { fill:[], clues:[] } (máy chủ truyền đề riêng; bỏ trống = đề luyện tay).
+   *  Trả về { type, question, answers[], hint1, hint2, clues? } */
+  function generate(tier, rand = Math.random, bank){
+    const fill = bank && bank.fill && bank.fill.length ? bank.fill : PRACTICE_FILL;
+    const clueSet = bank && bank.clues && bank.clues.length ? bank.clues : PRACTICE_CLUES;
+    if (tier >= 3) return Object.assign({ type:'clues' }, JSON.parse(JSON.stringify(pick(clueSet, rand))));
     if (tier === 1){
       if (rand() < 0.6){
         const x = pick(WORDS.filter(v => v.w.length <= 9), rand);
         return { type:'anagram', question:`Sắp xếp lại các chữ cái thành từ khoá dịch vụ iNET:  ${shuffleWord(x.w, rand)}`,
                  answers:[x.w], hint1:x.hint, hint2:`Có ${x.w.length} chữ cái, bắt đầu bằng "${x.w[0]}"` };
       }
-      return Object.assign({ type:'fill' }, pick(SAMPLE_FILL, rand));
+      return Object.assign({ type:'fill' }, JSON.parse(JSON.stringify(pick(fill, rand))));
     }
     const x = pick(WORDS, rand);
     if (rand() < 0.5){
@@ -100,5 +105,5 @@
     const n = normalize(input);
     return !!n && answerList.some(a => normalize(a) === n);
   }
-  return { normalize, generate, check, WORDS, SAMPLE_FILL, SAMPLE_CLUES };
+  return { normalize, generate, check, WORDS, PRACTICE_FILL, PRACTICE_CLUES };
 });

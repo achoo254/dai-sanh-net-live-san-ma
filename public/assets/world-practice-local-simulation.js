@@ -100,6 +100,8 @@ window.PracticeHub = (() => {
     }
     function answer(id, text){
       if (!puzzle || puzzle.id !== id) return;
+      const clues = puzzle.q.clues || [];                       // giống bản live: cấp 3 phải đọc đủ manh mối mới trả lời
+      if (clues.length && puzzle.found.size < clues.length) return out({ t:'ans_r', id, ok:false, needClues: clues.length - puzzle.found.size });
       if (window.PuzzleKit.check(puzzle.q.answers, text)){
         clearTimeout(puzzle.timer);
         const ms = Date.now() - puzzle.opened, bonus = 30 + Math.max(0, Math.round(50 * (1 - ms / HOLD)));
